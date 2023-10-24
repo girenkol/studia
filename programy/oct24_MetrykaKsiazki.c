@@ -42,4 +42,17 @@ void main()
     glowa = utworz_element(glowa, (metryka_ksiazki) { .tytul = "Przygody Kubusia Puchatka", .autor = "A. A. Milne", .rok_wydania = 1929, .liczba_stron = 124, .cena = 36.7});
 
     glowa = utworz_element(glowa, (metryka_ksiazki) { .tytul = "Dziwne przypadki Prosiaczka", .autor = "A. A. Milne", .rok_wydania = 1932, .liczba_stron = 87, .cena = 66.32});
+
+    element *wypisywana = glowa;
+    while (wypisywana)
+    {
+        printf("Tytul: %s\n", wypisywana->ksiazka.tytul);
+        printf("Autor: %s\n", wypisywana->ksiazka.autor);
+        printf("Rok wydania: %d\n", wypisywana->ksiazka.rok_wydania);
+        printf("Liczba stron: %d\n", wypisywana->ksiazka.liczba_stron);
+        printf("Cena: %.2f PLN\n", wypisywana->ksiazka.cena);
+        printf("\n");
+
+        wypisywana = wypisywana->nastepny;
+    }
 }
