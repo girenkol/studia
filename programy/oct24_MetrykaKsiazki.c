@@ -72,21 +72,30 @@ void usun_z_konca_rekurencyjnie(element* glowa)
     }
 }
 
-void usun_dany_element(element* glowa, int nr_elementu)
+/*void usun_dany_element(element* glowa, int nr_elementu) //to moje ale nie dziala
 {
     if(!glowa) return;
     if (!glowa->nastepny)
         free(glowa);
-    for (int i=0; glowa->nastepny && glowa->nastepny->nastepny; i++)
+    for (int i=0; glowa->nastepny; i++)
     {
         if(i == nr_elementu)
         {
-            free(glowa);
-            break;
+            free(glowa->nastepny);
+            glowa->nastepny = NULL;
+            //break;
         }
-        glowa = glowa->nastepny;
-    }
-    
+        //glowa = glowa->nastepny;
+    }   
+}*/
+
+void usun_dany_element(element* glowa, int index)
+{
+    element* poprzedni = NULL;
+
+    for(int i=0; glowa && glowa->nastepny && i++ < index; poprzedni = glowa, glowa = glowa->nastepny);
+    poprzedni->nastepny = glowa->nastepny;
+    free(glowa);
 }
 
 void wypisz(element* glowa)
@@ -124,6 +133,8 @@ void main()
     glowa = utworz_element(glowa, (metryka_ksiazki) { .tytul = "Dziwne przypadki Prosiaczka", .autor = "A. A. Milne", .rok_wydania = 1932, .liczba_stron = 87, .cena = 66.32});
     
     glowa = utworz_element(glowa, (metryka_ksiazki) { .tytul = "Puchatek na tropie Harryego Pottera", .autor = "Jaktak Jessing", .rok_wydania = 1966, .liczba_stron = 456, .cena = 70.55});
+
+    //glowa = utworz_element(glowa, (metryka_ksiazki) { .tytul = "aaaPuchatek na tropie Harryego Pottera", .autor = "aaaJaktak Jessing", .rok_wydania = 31966, .liczba_stron = 33456, .cena = 370.55});
 
     wypisz(glowa);
     printf("Tworzenie elementow zakonczone\n\n");
