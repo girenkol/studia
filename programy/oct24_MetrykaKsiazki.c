@@ -19,13 +19,14 @@ element* utworz_element(element* glowa, metryka_ksiazki ksiazka)
     if(glowa)
     {
         if (glowa -> nastepny)
-            return utworz_element(glowa->nastepny, ksiazka);
+            utworz_element(glowa->nastepny, ksiazka);
         else
         {
             glowa->nastepny = malloc(sizeof(element));
             *(glowa->nastepny) = (element) { .ksiazka = ksiazka, .nastepny = NULL};
             return glowa;
         }
+        return glowa;
     }
     else
     {
@@ -80,9 +81,10 @@ void usun_dany_element(element* glowa, int nr_elementu)
     {
         if(i == nr_elementu)
         {
-            free(glowa->nastepny);
-            glowa->nastepny = NULL;
+            free(glowa);
+            break;
         }
+        glowa = glowa->nastepny;
     }
     
 }
@@ -130,4 +132,4 @@ void main()
     usun_dany_element(glowa, 1);
 
     wypisz(glowa);
-}
+}// na nastepnych zajeciach lista dwukierunkowa np. glowa nie ma elementu poprzedniego a ostatni ogon nie ma elementu nastepnego (na zaliczenie :/)
