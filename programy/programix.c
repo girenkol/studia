@@ -57,14 +57,14 @@ return NULL;
 
 if(glowa->nastepny)
 {
-    element* ostracyzm_ostatniego_osobnika=glowa;
+    element* wskaznikpocz=glowa;
     while(glowa->nastepny->nastepny)
     {
         glowa=glowa->nastepny;
     }
     free(glowa->nastepny);
     glowa->nastepny=NULL;
-    return ostracyzm_ostatniego_osobnika;
+    return wskaznikpocz;
 }
 else
 {
