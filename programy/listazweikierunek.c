@@ -36,7 +36,7 @@ int dlugosc(element *glowa)
 {
     if(!glowa) return 0;
     int i=1;
-    for(; glowa->nastepny; i++, glowa=glowa->nastepny); 
+    for(; glowa->nastepny; i++, glowa=glowa->nastepny);
     return i;
 }
 
@@ -61,14 +61,14 @@ element *wstaw_po(element *glowa, int indeks, void* dane);
 void zamien(element *glowa, int indeks_1, int indeks_2);
 void sortuj(element *glowa);
 
-void zniszcz(element* glowa) //niszczarka cos nie wspolpracuje, 
+void zniszcz(element* glowa) //niszczarka cos nie wspolpracuje,
 {
     if(glowa)
     {
+        glowa=NULL;
         zniszcz(glowa->nastepny);
         free(glowa);
     }
-    glowa = NULL;
 }
 
 void wypisz(element* glowa)
@@ -77,7 +77,7 @@ void wypisz(element* glowa)
     {
         printf("liczba w elemencie: %d\n", glowa->liczba);
         wypisz(glowa->nastepny);
-    }     
+    }
     else
         printf("TO WSZYSTKO\n");
 }
@@ -94,9 +94,8 @@ void main()
     usun(glowa, 1);
 
     wypisz(glowa);
-    
-    printf("dlugosc: %d\n", dlugosc(glowa));
 
+    printf("dlugosc: %d\n", dlugosc(glowa));
     zniszcz(glowa);
     wypisz(glowa);
 }
