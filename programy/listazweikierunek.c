@@ -61,14 +61,14 @@ element *wstaw_po(element *glowa, int indeks, void* dane);
 void zamien(element *glowa, int indeks_1, int indeks_2);
 void sortuj(element *glowa);
 
-void zniszcz(element* glowa) //niszczarka cos nie wspolpracuje,
+element *zniszcz(element* glowa) //niszczarka cos nie wspolpracuje,
 {
     if(glowa)
     {
-        glowa=NULL;
         zniszcz(glowa->nastepny);
         free(glowa);
     }
+    return NULL;
 }
 
 void wypisz(element* glowa)
@@ -96,7 +96,8 @@ void main()
     wypisz(glowa);
 
     printf("dlugosc: %d\n", dlugosc(glowa));
-    zniszcz(glowa);
+
+    glowa = zniszcz(glowa);
     wypisz(glowa);
 }
 
