@@ -1,6 +1,7 @@
 #include <stdio.h>
 
-typedef struct {
+typedef struct
+{
     int wiersze;
     int kolumny;
     double dane[100][100];
