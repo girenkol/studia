@@ -70,3 +70,4 @@ void main()
             printf("\n"); 
     } 
 } 
+//zrobic wyznacznik odwrotnosc mnozenie macierzy
