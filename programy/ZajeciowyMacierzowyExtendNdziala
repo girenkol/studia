@@ -1,0 +1,140 @@
+#include <stdio.h>
+#include <malloc.h>
+#include <stdlib.h>
+
+typedef struct
+{
+    int wiersze, kolumny;
+    float* ptr;
+} macierz;
+
+macierz utworz_macierz(int wiersze, int kolumny)
+{
+    return (macierz) { .wiersze = wiersze, .kolumny = kolumny, .ptr = calloc(wiersze * kolumny, sizeof(float))};
+}
+
+macierz generuj_macierz(macierz mat)
+{
+    srand ( time(NULL) );
+    for(int i=0; i < mat.wiersze; i++)
+        for(int j=0; j < mat.kolumny; j++)
+            mat.ptr[i * mat.kolumny + j] = rand() % 10 + 0.01*(rand() % 100);
+
+    return mat;
+}
+
+void wypisz_macierz(macierz mat)
+{
+    for(int i=0; i < mat.wiersze; i++)
+    {
+        for(int j=0; j < mat.kolumny; j++)
+            printf("%4.2f\t", mat.ptr[i+j]);
+        printf("\n");
+    }
+    printf("\n\n");
+}
+
+macierz mnozenie(macierz mat1, macierz mat2)
+{
+    if(mat1.kolumny == mat2.wiersze)
+    {
+        macierz wynik = utworz_macierz(mat1.wiersze, mat2.kolumny);
+
+        for (int i = 0; i < wynik.wiersze; i++)
+        {
+            for (int j = 0; j < wynik.kolumny; j++)
+            {
+                wynik.ptr[i+j] = 0;
+                for (int k = 0; k < mat1.kolumny; k++)
+                    wynik.ptr[i+j] += mat1.ptr[i+k] * mat2.ptr[j+k];
+            }
+        }
+        return wynik ;
+    }
+    else
+    {
+        printf("\nmnozenie jest niemozliwe\n");
+        return utworz_macierz(0,0);
+    }
+
+}
+/*
+float det(macierz mat)
+{
+    if(mat.wiersze != mat.kolumny)
+    {
+        printf("\n kolumny != wiersze, wiec sie nie da\n");
+        return 0;
+    }
+
+    if(mat.wiersze == 2)
+    {
+        return ((mat.ptr[0] * mat.ptr[3]) - (mat.ptr[1] * mat.ptr[2]));
+    }
+
+    float wynik;
+    int czynnik = 1;
+
+    for(int i=0; i < mat.wiersze; i++)
+    {
+        macierz podmat = utworz_macierz(mat.wiersze-1, mat.wiersze-1); //tworzy podmat o skreslana kolumne mniejsza
+    }
+
+}
+*/
+
+float det(macierz mat)
+{
+    if(mat.wiersze != mat.kolumny)
+    {
+        printf("\n kolumny != wiersze, wiec sie nie da\n");
+        return 0;
+    }
+
+    if(mat.wiersze == 2)
+    {
+        return ((mat.ptr[0] * mat.ptr[3]) - (mat.ptr[1] * mat.ptr[2]));
+    }
+
+    float wynik = 0;
+    int czynnik = 1;
+
+    for(int i = 0; i < mat.wiersze; i++)
+    {
+        macierz podmat = utworz_macierz(mat.wiersze - 1, mat.kolumny - 1); // tworzy podmacierz o skreślonej kolumnie mniejszą
+
+        for (int wier = 1; wier < mat.wiersze; wier++)
+        {
+            for (int kol = 0, kol12 = 0; kol < mat.kolumny; kol++)
+            {
+                if (kol != i)
+                {
+                    podmat.ptr[(wier - 1) * (mat.kolumny - 1) + kol12] = mat.ptr[wier * mat.kolumny + kol];
+                    kol12++;
+                }
+            }
+        }
+
+        wynik += czynnik * mat.ptr[i] * det(podmat);
+        czynnik = -czynnik;
+    }
+
+    return wynik;
+}
+
+void main()
+{
+    macierz mat1 = utworz_macierz(2,2);
+    mat1 = generuj_macierz(mat1);
+    wypisz_macierz(mat1);
+
+    macierz mat2 = utworz_macierz(4,5);
+    mat2 = generuj_macierz(mat2);
+    wypisz_macierz(mat2);
+
+    macierz wynik_mnozenia = mnozenie(mat1, mat2);
+    wypisz_macierz(wynik_mnozenia);
+
+    float wynik = det(mat1);
+    printf("Wyznacznik macierzy mat1: %.2f\n", wynik);
+}
