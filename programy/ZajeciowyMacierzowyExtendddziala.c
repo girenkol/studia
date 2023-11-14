@@ -101,14 +101,17 @@ float det(macierz mat)
 
 void main()
 {
+    printf("> mat1\n");
     macierz mat1 = utworz_macierz(3,3);
     mat1 = generuj_macierz(mat1);
     wypisz_macierz(mat1);
 
+    printf("> mat2\n");
     macierz mat2 = utworz_macierz(3,2);
     mat2 = generuj_macierz(mat2);
     wypisz_macierz(mat2);
 
+    printf("> mat1 x mat2\n");
     macierz wynik_mnozenia = mnozenie(mat1, mat2);
     wypisz_macierz(wynik_mnozenia);
 
