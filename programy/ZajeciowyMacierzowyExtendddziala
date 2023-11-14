@@ -36,7 +36,7 @@ void wypisz_macierz(macierz mat)
 
 macierz mnozenie(macierz mat1, macierz mat2)
 {
-    if(mat1.kolumny == mat2.wiersze)
+    if (mat1.kolumny == mat2.wiersze)
     {
         macierz wynik = utworz_macierz(mat1.wiersze, mat2.kolumny);
 
@@ -44,20 +44,20 @@ macierz mnozenie(macierz mat1, macierz mat2)
         {
             for (int j = 0; j < wynik.kolumny; j++)
             {
-                wynik.ptr[i+j] = 0;
+                wynik.ptr[i * wynik.kolumny + j] = 0;
                 for (int k = 0; k < mat1.kolumny; k++)
-                    wynik.ptr[i+j] += mat1.ptr[i+k] * mat2.ptr[j+k];
+                    wynik.ptr[i * wynik.kolumny + j] += mat1.ptr[i * mat1.kolumny + k] * mat2.ptr[k * mat2.kolumny + j];
             }
         }
-        return wynik ;
+        return wynik;
     }
     else
     {
         printf("\nmnozenie jest niemozliwe\n");
-        return utworz_macierz(0,0);
+        return utworz_macierz(0, 0);
     }
-
 }
+
 
 
 float det(macierz mat)
@@ -101,11 +101,11 @@ float det(macierz mat)
 
 void main()
 {
-    macierz mat1 = utworz_macierz(5,5);
+    macierz mat1 = utworz_macierz(3,3);
     mat1 = generuj_macierz(mat1);
     wypisz_macierz(mat1);
 
-    macierz mat2 = utworz_macierz(4,5);
+    macierz mat2 = utworz_macierz(3,2);
     mat2 = generuj_macierz(mat2);
     wypisz_macierz(mat2);
 
