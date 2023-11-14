@@ -28,7 +28,7 @@ void wypisz_macierz(macierz mat)
     for(int i=0; i < mat.wiersze; i++)
     {
         for(int j=0; j < mat.kolumny; j++)
-            printf("%4.2f\t", mat.ptr[i+j]);
+            printf("%4.2f\t", mat.ptr[i*mat.kolumny+j]);
         printf("\n");
     }
     printf("\n\n");
@@ -58,30 +58,7 @@ macierz mnozenie(macierz mat1, macierz mat2)
     }
 
 }
-/*
-float det(macierz mat)
-{
-    if(mat.wiersze != mat.kolumny)
-    {
-        printf("\n kolumny != wiersze, wiec sie nie da\n");
-        return 0;
-    }
 
-    if(mat.wiersze == 2)
-    {
-        return ((mat.ptr[0] * mat.ptr[3]) - (mat.ptr[1] * mat.ptr[2]));
-    }
-
-    float wynik;
-    int czynnik = 1;
-
-    for(int i=0; i < mat.wiersze; i++)
-    {
-        macierz podmat = utworz_macierz(mat.wiersze-1, mat.wiersze-1); //tworzy podmat o skreslana kolumne mniejsza
-    }
-
-}
-*/
 
 float det(macierz mat)
 {
@@ -105,12 +82,12 @@ float det(macierz mat)
 
         for (int wier = 1; wier < mat.wiersze; wier++)
         {
-            for (int kol = 0, kol12 = 0; kol < mat.kolumny; kol++)
+            for (int kol = 0, kolPodmat = 0; kol < mat.kolumny; kol++)
             {
                 if (kol != i)
                 {
-                    podmat.ptr[(wier - 1) * (mat.kolumny - 1) + kol12] = mat.ptr[wier * mat.kolumny + kol];
-                    kol12++;
+                    podmat.ptr[(wier - 1) * (mat.kolumny - 1) + kolPodmat] = mat.ptr[wier * mat.kolumny + kol];
+                    kolPodmat++;
                 }
             }
         }
@@ -124,7 +101,7 @@ float det(macierz mat)
 
 void main()
 {
-    macierz mat1 = utworz_macierz(2,2);
+    macierz mat1 = utworz_macierz(5,5);
     mat1 = generuj_macierz(mat1);
     wypisz_macierz(mat1);
 
