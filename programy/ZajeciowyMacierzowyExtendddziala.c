@@ -58,8 +58,6 @@ macierz mnozenie(macierz mat1, macierz mat2)
     }
 }
 
-
-
 float det(macierz mat)
 {
     if(mat.wiersze != mat.kolumny)
@@ -99,6 +97,41 @@ float det(macierz mat)
     return wynik;
 }
 
+macierz odwrotna(macierz mat)
+{
+    if(det(mat) == 0) // czy sie da odw
+    {
+        printf("det(mat)=0 => odwrotnosc niemozliwa\n");
+        return;
+    }
+    
+    float detMat = det(mat);
+    macierz wynik = utworz_macierz(mat.wiersze, mat.kolumny);
+
+    int czynnik = 1;
+    /*
+    for(int wier = mat.wiersze, i=0; wier > 0; wier--, i++) // to ma byc transpionowana, robie filpa i i to jest kolumna a nie wiersz no i j to wiersz
+    {
+        for(int kol = mat.kolumny, j=0; kol > 0; kol--, j++)
+        {
+            //wynik.ptr[i * mat.kolumny + j] = (czynnik * mat.ptr[wier * mat.kolumny + kol])/detMat;
+
+            czynnik = -czynnik;
+        }
+    }
+    */
+    for(int i = -1, wier = mat.wiersze; i <= mat.wiersze; i++, wier--) 
+    {
+        for(int j = -1, kol = mat.kolumny; j <= mat.kolumny; j++, kol--)
+        {
+            wynik.ptr[i * wynik.kolumny + j] =  ( czynnik * mat.ptr[wier * mat.kolumny + kol] ) / detMat;
+            czynnik = -czynnik;
+        }
+    }
+
+    return wynik;
+}
+
 void main()
 {
     printf("> mat1\n");
@@ -114,6 +147,10 @@ void main()
     printf("> mat1 x mat2\n");
     macierz wynik_mnozenia = mnozenie(mat1, mat2);
     wypisz_macierz(wynik_mnozenia);
+
+    printf("> (mat1)^-1\n");
+    macierz wynik_odwrotnosci = odwrotna(mat1);
+    wypisz_macierz(wynik_odwrotnosci);
 
     float wynik = det(mat1);
     printf("Wyznacznik macierzy mat1: %.2f\n", wynik);
