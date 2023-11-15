@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <malloc.h>
 #include <stdlib.h>
+#include <time.h>
 
 typedef struct
 {
@@ -174,6 +175,4 @@ void main()
     printf("> (mat1)^-1\n");
     macierz wynik_odwrotnosci = odwrotna(mat1);
     wypisz_macierz(wynik_odwrotnosci);
-
-
 }
