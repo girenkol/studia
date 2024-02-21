@@ -7,3 +7,6 @@ L[3:2:-1]
 K = (0,1) - krotka
 nie można zrobić K[0]=9
 
+licznik znakow w txt
+txt = "Ala ma kota, a kot ma Ale."
+[(i, txt.count(i)) for i in set (txt)]
