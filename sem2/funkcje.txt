@@ -1,0 +1,79 @@
+print() - Wyświetla wartości na standardowym wyjściu.
+
+len() - Zwraca długość obiektu, np. liczby elementów w liście lub długość napisu.
+
+type() - Zwraca typ obiektu.
+
+input() - Pobiera dane od użytkownika za pomocą konsoli.
+
+int() - Konwertuje obiekt na liczbę całkowitą.
+
+str() - Konwertuje obiekt na napis.
+
+float() - Konwertuje obiekt na liczbę zmiennoprzecinkową.
+
+list() - Tworzy listę.
+
+tuple() - Tworzy krotkę.
+
+dict() - Tworzy słownik.
+
+set() - Tworzy zbiór.
+
+range() - Generuje sekwencję liczb.
+
+max() - Zwraca największą wartość w sekwencji.
+
+min() - Zwraca najmniejszą wartość w sekwencji.
+
+sum() - Zwraca sumę wszystkich elementów w sekwencji.
+
+abs() - Zwraca wartość bezwzględną liczby.
+
+sorted() - Sortuje elementy sekwencji.
+
+any() - Zwraca True, jeśli chociaż jeden element w sekwencji jest prawdziwy.
+
+all() - Zwraca True, jeśli wszystkie elementy w sekwencji są prawdziwe.
+
+zip() - Łączy elementy z kilku sekwencji w pary krotek.
+
+chr() - Zwraca znak Unicode o podanym kodzie.
+
+ord() - Zwraca kod Unicode dla podanego znaku.
+
+enumerate() - Generuje indeksy i wartości z sekwencji.
+
+filter() - Filtruje elementy sekwencji na podstawie funkcji filtrującej.
+
+map() - Stosuje funkcję do każdego elementu sekwencji.
+
+slice() - Tworzy obiekt wycinka sekwencji.
+
+callable() - Sprawdza, czy obiekt jest wywoływalny.
+
+getattr() - Zwraca wartość atrybutu obiektu.
+
+setattr() - Ustawia wartość atrybutu obiektu.
+
+delattr() - Usuwa atrybut obiektu.
+
+format() - Formatuje napis.
+
+round() - Zaokrągla liczbę do określonej liczby miejsc po przecinku.
+
+pow() - Podnosi liczbę do określonej potęgi.
+
+divmod() - Zwraca wynik dzielenia i resztę.
+
+hex() - Konwertuje liczbę na napis w formacie szesnastkowym.
+
+oct() - Konwertuje liczbę na napis w formacie ósemkowym.
+
+bin() - Konwertuje liczbę na napis w formacie binarnym.
+
+next() - Pobiera następny element z iteratora.
+
+iter() - Zwraca iterator dla obiektu.
+
+reversed() - Zwraca odwrócony iterator.
