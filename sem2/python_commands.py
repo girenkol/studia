@@ -10,3 +10,17 @@ nie można zrobić K[0]=9
 licznik znakow w txt
 txt = "Ala ma kota, a kot ma Ale."
 [(i, txt.count(i)) for i in set (txt)]
+
+macierz jednostkowa
+[(i,j,1 if i==j else 0) for i in range(3) for j in range(3)]
+
+to są wskaźniki więc jak zmieniam wartość w a to na kopi b też sie to zmieni
+>>> a = [0,1,2]
+>>> b=a
+>>> b
+[0, 1, 2]
+>>> a[2]=4
+>>> b
+[0, 1, 4]
+>>> a
+[0, 1, 4]
