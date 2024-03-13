@@ -14,5 +14,5 @@ if __name__ == "__main__":
 
     s1 = Samochod("XD 666")
     s1.UruchomSilnik()
-    s2 = Samochod("JP 2137N")
+    s2 = Samochod("DUP 4")
     s2.UruchomSilnik()
