@@ -11,9 +11,6 @@ class Graf():
         self.wierzcholki = list(wierzcholki)
         self.krawedzie = list(krawedzie)
 
-    def Utworz_zbior(self, element):
-        return {element}
-
     def Sortuj(self, A):
         return [krawedz[0] for krawedz in sorted(A, key=lambda x: x[1])]
 
@@ -21,6 +18,9 @@ class Graf():
         for element in A:
             if a in element:
                 return element
+
+    def Utworz_zbior(self, element):
+        return {element}
 
     def Kruskal(self, Graf, Waga):
         A = []
