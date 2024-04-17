@@ -8,9 +8,9 @@ class Graf():
             if not krawedz[0][0] in wierzcholki or not krawedz[0][1] in wierzcholki:
                 raise Exception("nieprawidłowe krawędzie")
 
-        self.wierzcholki = list(wierzcholki)
-        self.krawedzie = list(krawedzie)
-
+        self.wierzcholki = wierzcholki
+        self.krawedzie = krawedzie
+        
     def Sortuj(self, A):
         return [krawedz[0] for krawedz in sorted(A, key=lambda x: x[1])]
 
