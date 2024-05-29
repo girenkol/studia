@@ -1,0 +1,27 @@
+Spójrzmy na numer PESEL "02070803628" i omówmy, jak kroki wykonywane przez kod są związane z jego analizą:
+
+Inicjalizacja maszyny Turinga:
+
+Program tworzy maszynę Turinga, która zostanie użyta do sprawdzenia poprawności numeru PESEL. 
+W trakcie tworzenia maszyny Turinga definiowane są reguły, które będą wykonywane na podstawie odczytanych cyfr z tasmy.
+Wykonanie kroków maszyny Turinga:
+
+Maszyna Turinga zaczyna od stanu początkowego, czyli stanu "0", i pozycji głowicy na pierwszej cyfrze numeru PESEL.
+Następnie iteruje po kolejnych cyfrach numeru PESEL, przechodząc przez różne stany zgodnie z zasadami funkcji przejścia.
+Podczas każdego kroku maszyny Turinga odczytywana jest cyfra z tasmy, a następnie na podstawie aktualnego stanu 
+i odczytanej cyfry podejmowane są odpowiednie działania, takie jak zapis nowej cyfry na tasme, 
+zmiana stanu czy przesunięcie głowicy w lewo lub w prawo.
+Proces ten trwa, dopóki maszyna nie osiągnie stanu końcowego.
+Analiza kroków:
+
+Podczas analizy numeru PESEL, maszyna Turinga przechodzi przez różne stany, aby sprawdzić jego poprawność.
+Każdy stan odzwierciedla pewną logikę sprawdzania numeru PESEL, na przykład sprawdzenie, czy suma kontrolna się zgadza.
+Jeśli numer PESEL jest poprawny, maszyna osiąga stan końcowy "koncowy".
+Jeśli numer PESEL jest niepoprawny, maszyna osiąga stan "odrzucony".
+Zapisanie kroków do pliku:
+
+Podczas wykonywania kroków maszyny Turinga, każdy krok jest rejestrowany, a informacje o stanie maszyny, pozycji głowicy, 
+odczytanej cyfrze, nowym stanie, nowej cyfrze i ruchu głowicy są zapisywane do pliku "kroki_maszyny_turinga.txt".
+Ten plik zawiera szczegółowe informacje o tym, jak maszyna Turinga przetwarzała numer PESEL krok po kroku.
+W ten sposób, poprzez analizę kroków maszyny Turinga i zapisanych informacji w pliku, możemy zrozumieć dokładnie, 
+jak algorytm działał na konkretnym przykładzie numeru PESEL.
