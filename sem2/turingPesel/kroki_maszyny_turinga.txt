@@ -1,0 +1,11 @@
+Stan: 0, Pozycja głowicy: 0, Znak pod głowicą: 0, Nowy stan: 1, Nowy znak: 0, Ruch: R
+Stan: 1, Pozycja głowicy: 1, Znak pod głowicą: 2, Nowy stan: 2, Nowy znak: 2, Ruch: R
+Stan: 2, Pozycja głowicy: 2, Znak pod głowicą: 0, Nowy stan: 3, Nowy znak: 0, Ruch: R
+Stan: 3, Pozycja głowicy: 3, Znak pod głowicą: 7, Nowy stan: 4, Nowy znak: 7, Ruch: R
+Stan: 4, Pozycja głowicy: 4, Znak pod głowicą: 0, Nowy stan: 5, Nowy znak: 0, Ruch: R
+Stan: 5, Pozycja głowicy: 5, Znak pod głowicą: 8, Nowy stan: 6, Nowy znak: 8, Ruch: R
+Stan: 6, Pozycja głowicy: 6, Znak pod głowicą: 0, Nowy stan: 7, Nowy znak: 0, Ruch: R
+Stan: 7, Pozycja głowicy: 7, Znak pod głowicą: 3, Nowy stan: 8, Nowy znak: 3, Ruch: R
+Stan: 8, Pozycja głowicy: 8, Znak pod głowicą: 6, Nowy stan: 9, Nowy znak: 6, Ruch: R
+Stan: 9, Pozycja głowicy: 9, Znak pod głowicą: 2, Nowy stan: 10, Nowy znak: 2, Ruch: R
+Stan: 10, Pozycja głowicy: 10, Znak pod głowicą: 8, Nowy stan: koncowy, Nowy znak: 8, Ruch: R
