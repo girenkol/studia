@@ -10,26 +10,20 @@ class Turing:
         self.current_state = initial_state
 
     def load_definition_from_file(self, filename):
-    with open((stany_maszyny_turinga.txt), 'r') as file:
-        lines = file.readlines()
-        self.alphabet = lines[1].split()
-        print("Alphabet:", self.alphabet)
-        self.states = lines[3].split()
-        print("States:", self.states)
-        self.initial_state = lines[5].strip()
-        print("Initial State:", self.initial_state)
-        self.accepting_state = lines[7].strip()
-        print("Accepting State:", self.accepting_state)
-        self.transitions = {}
-        for line in lines[9:]:
-            parts = line.split()
-            if len(parts) == 5:
-                current_state, current_symbol, new_state, new_symbol, direction = parts
-                if current_state not in self.transitions:
-                    self.transitions[current_state] = {}
-                self.transitions[current_state][current_symbol] = (new_state, new_symbol, direction)
-        print("Transitions:", self.transitions)
-
+        with open(filename, 'r') as file:
+            lines = file.readlines()
+            self.alphabet = lines[1].split()
+            self.states = lines[3].split()
+            self.initial_state = lines[5].strip()
+            self.accepting_state = lines[7].strip()
+            self.transitions = {}
+            for line in lines[9:]:
+                parts = line.split()
+                if len(parts) == 5:
+                    current_state, current_symbol, new_state, new_symbol, direction = parts
+                    if current_state not in self.transitions:
+                        self.transitions[current_state] = {}
+                    self.transitions[current_state][current_symbol] = (new_state, new_symbol, direction)
 
     def step(self):
         current_symbol = self.tape[self.head_position] if self.head_position < len(self.tape) else '#'
@@ -62,7 +56,7 @@ def sprawdz_pesel_z_maszyna_turinga(pesel, plik_z_definicja):
     return turing_machine.current_state != 'odrzucony'
 
 # Przykład użycia
-pesel = "80010100012"
+pesel = "68013189176"
 plik_definicji = "maszyna_turinga_pesel.txt"
 
 if sprawdz_pesel_z_maszyna_turinga(pesel, plik_definicji):
