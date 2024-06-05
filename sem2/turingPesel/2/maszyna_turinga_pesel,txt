@@ -1,68 +1,28 @@
-# Alfabet
-0 1
+# Sprawdza numer PESEL.
 
-# Stany
-q0 q1 q2 q3 q4 q5 q6 q7 q8 q9 q10 q11 q12 q13
-
-# Stan początkowy
-q0
-
-# Stan akceptujący
-q13
-
-# Przejścia
-q0 0 q1 R
-q0 1 q2 R
-q0 # q10 R
-
-q1 0 q10 R
-q1 1 q3 R
-q1 # q10 R
-
-q2 0 q4 R
-q2 1 q10 R
-q2 # q10 R
-
-q3 0 q10 R
-q3 1 q5 R
-q3 # q10 R
-
-q4 0 q10 R
-q4 1 q10 R
-q4 # q10 R
-
-q5 0 q10 R
-q5 1 q6 R
-q5 # q10 R
-
-q6 0 q10 R
-q6 1 q7 R
-q6 # q10 R
-
-q7 0 q8 R
-q7 1 q10 R
-q7 # q10 R
-
-q8 0 q10 R
-q8 1 q10 R
-q8 # q10 R
-
-q9 0 q10 R
-q9 1 q10 R
-q9 # q10 R
-
-q10 0 q10 R
-q10 1 q10 R
-q10 # q11 R
-
-q11 0 q12 R
-q11 1 q10 R
-q11 # q13 R
-
-q12 0 q10 R
-q12 1 q10 R
-q12 # q13 R
-
-q13 0 q13 R
-q13 1 q13 R
-q13 # q13 R
+# Format: Dostaje numer PESEL, sprawdza jego poprawność i zwraca wynik.
+# Przykład: '68013189176' => 'Numer PESEL jest poprawny.' lub 'Numer PESEL jest niepoprawny.'
+input: '68013189176'
+blank: ' '
+start state: right
+table:
+  # Zaczynamy od prawego krańca numeru PESEL.
+  right:
+    [0-9]: {write: c, L: sprawdz}
+  sprawdz:
+    [0-9]: {L: sprawdz}
+    c: {write: ' ', R: start}
+  start:
+    [0,2,4,6,8]: {write: 0, R: nastepny}
+    [1,3,5,7,9]: {write: 1, R: nastepny}
+  nastepny:
+    [0-9]: {R: nastepny}
+    ' ': {L: porownaj}
+  porownaj:
+    [0,1,2,3,4,5,6,7,8,9]: {L: porownaj}
+    c: {L: koniec}
+  koniec:
+    [0]: {write: N, R}
+    [1]: {write: P, R}
+    [ ]: {R: zakoncz}
+  zakoncz:
