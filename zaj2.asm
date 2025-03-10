@@ -44,7 +44,7 @@ decr:
         RETI
 
 resetd:	
-	mov.b #09h, P2OUT
+	mov.b #0Ah, P2OUT               ; dalem A bo wtedy z 0 dec idzie do 9
 	RETI
 resetz
 	mov.b #00h, P2OUT
