@@ -1,7 +1,7 @@
 #include "msp430.h"            
 
 ;------------------------------------------------------------------------------
-; Program do obslugi przerwan i manipulacji wartoscia na porcie P2
+; 
 ;------------------------------------------------------------------------------
     ORG    01100h              ; początkowy adres pamieci programu
 
