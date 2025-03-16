@@ -5,7 +5,8 @@
 ;------------------------------------------------------------------------------
     ORG    01100h              ; początkowy adres pamieci programu
 
-INIT:   mov.w   #0A00h,SP        
+INIT:   
+    mov.w   #0A00h,SP        
     mov.w   #WDTPW+WDTHOLD,&WDTCTL ; watchdoga off
  
     bis.b   #0FFh,&P2DIR         ; ustawienie wszystkich pinow P2 jako wyjscia
@@ -13,7 +14,8 @@ INIT:   mov.w   #0A00h,SP
     mov.b   #08h,&P1IES          ; ustawienie przerwania na zbocze opadajace dla P1.3
     bis.w   #GIE,SR              ; wlaczenie globalnych przerwan (flaga GIE w rejestrze SR)
         
-main:   push    SR                
+main:  
+    push    SR                
     mov.b   #01h, P2OUT          ; inicjalizacja P2OUT
 loop:   
     jmp     loop                 ; nieskonczona petla glowna
