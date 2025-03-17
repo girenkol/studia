@@ -21,7 +21,7 @@ loop:
     jmp     loop                 ; nieskonczona petla glowna
    
 PORT_P: 
-    bic.b   #06h,  P2IFG         ; wyczyszczenie flag przerwan dla pinow P2.2 i P2.1
+    bic.b   #06h,  P2IFG         ; wyczyszczenie flag przerwan dla pinow P2.2 i P2.1 ?niepotrzebne?
     bit.b   #04h,  P1IN          ; sprawdzenie stanu pinu P1.2
     jz  increase                 ; jesli P1.2 jest niski skok do increase
     setc                         ; ustawienie bitu carry na 1
