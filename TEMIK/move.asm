@@ -13,31 +13,44 @@ INIT:
     bis.b   #02h,&P1IE           ; wlaczenie przerwania dla pinu P1.2
     mov.b   #02h,&P1IES          ; ustawienie przerwania na zbocze opadajace dla P1.2
     bis.w   #GIE,SR              ; wlaczenie globalnych przerwan
-    ;mov.b   #00h,  P2IFG
+    bis.b       #01h,&P1IE
+    bis.b       #01h,&P1IES
         
 main:  
-    push    SR                
+   ; push    SR                
     mov.b   #00h, P2OUT          ; inicjalizacja P2OUT
+
 loop:   
+  ;bit.b #01h, P1IN
+  ;jz    reset
     jmp     loop                 ; nieskonczona petla glowna
    
 PORT_P: 
-    bic.b   #06h,  P1IFG         
+    bic.b   #06h,  P1IFG
+    bit.b #01h, P1IN
+    jz    reset
     bit.b   #04h,  P1IN          
     jz  increase                
-    jnz decrease                
+    jnz decrease 
+    mov.b #00h,P1IFG
     RETI                         
 
 increase:
     setc                         
-    rrc.b  P2OUT                
+    rrc.b  P2OUT
+    mov.b #00h,P1IFG
     RETI                         
 
 decrease:               
     clrc                         ; wyczyszczenie bitu carry
     rlc.b  P2OUT                 ; rotacja w lewo w carry
+    mov.b #00h,P1IFG
     RETI
-
+    
+reset:
+    mov.b       #00h,P2OUT
+    mov.b #00h,P1IFG
+    RETI
 
 ;------------------------------------------------------------------------------
 ; Wektory przerwan
@@ -45,6 +58,6 @@ decrease:
     ORG    0FFFEh              ; wektor resetu
     DW    INIT                 
     ORG    0FFE8h              ; wektor przerwania
-    DW    PORT_P               
+    DW    PORT_P  
     
     END
