@@ -10,8 +10,8 @@ INIT:
     mov.w   #WDTPW+WDTHOLD,&WDTCTL ; watchdoga off
  
     bis.b   #0FFh,&P2DIR         ; ustawienie wszystkich pinow P2 jako wyjscia
-    bis.b   #08h,&P1IE           ; wlaczenie przerwania dla pinu P1.3
-    mov.b   #08h,&P1IES          ; ustawienie przerwania na zbocze opadajace dla P1.3
+    bis.b   #02h,&P1IE           ; wlaczenie przerwania dla pinu P1.1
+    mov.b   #02h,&P1IES          ; ustawienie przerwania na zbocze opadajace dla P1.1
     bis.w   #GIE,SR              ; wlaczenie globalnych przerwan (flaga GIE w rejestrze SR)
         
 main:  
@@ -21,7 +21,7 @@ loop:
     jmp     loop                 ; nieskonczona petla glowna
    
 PORT_P: 
-    bic.b   #0Ch,  P2IFG         ; wyczyszczenie flag przerwan dla pinow P2.2 i P2.3
+    bic.b   #06h,  P2IFG         ; wyczyszczenie flag przerwan dla pinow P2.2 i P2.1
     bit.b   #04h,  P1IN          ; sprawdzenie stanu pinu P1.2
     jz  increase                 ; jesli P1.2 jest niski skok do increase
     setc                         ; ustawienie bitu carry na 1
