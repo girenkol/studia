@@ -17,11 +17,11 @@ INIT:	mov.w	#0A00h,SP		; inicjalizacja wsk. stosu
         bis     #MC1,&TACTL
         bis     #TAIE, &TACTL
     
-        bis.b	#08h,&P1IE
-        mov.b   #08h,&P1IES
+        bis.b	#08h,&P4IE
+        mov.b   #08h,&P4IES
         
-        bis.b	#04h,&P1IE
-        mov.b   #04h,&P1IES
+        bis.b	#04h,&P4IE
+        mov.b   #04h,&P4IES
     
         bis.w   #GIE,SR                 ;wlacza flage globalnego przerwania znajdujaca sie w rejestrze SR
         
@@ -40,8 +40,8 @@ timer:
         
 przycisk_reset:
         mov.b   #00h, P2OUT
-        mov.b   #0h,P1IFG
-        RETI
+        mov.b   #0h,P4IFG
+        RET
   
 
 ;------------------------------------------------------------------------------
