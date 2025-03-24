@@ -1,11 +1,11 @@
-#include "msp430.h"			; dolaczenie biblioteki do MSP430
+#include "msp430.h"			
 ;------------------------------------------------------------------------------
-; Rotacja "1" na porcie P2, w lewo
+; 
 ;------------------------------------------------------------------------------
-	ORG	01100h			; poczatkowy adres pamieci programu
+	ORG	01100h			
 
-INIT:	mov.w	#0A00h,SP		; inicjalizacja wsk. stosu
-	mov.w	#WDTPW+WDTHOLD,&WDTCTL	; wylaczenie watchdoga
+INIT:	mov.w	#0A00h,SP		
+	mov.w	#WDTPW+WDTHOLD,&WDTCTL	
  
         bis.b	#0FFh,&P2DIR
         
@@ -23,10 +23,10 @@ INIT:	mov.w	#0A00h,SP		; inicjalizacja wsk. stosu
         bis.b	#04h,&P4IE
         mov.b   #04h,&P4IES
     
-        bis.w   #GIE,SR                 ;wlacza flage globalnego przerwania znajdujaca sie w rejestrze SR
+        bis.w   #GIE,SR                 
         
 main:	push	SR
-	mov.b	#10h, P2OUT		;inicjalizacja 
+	mov.b	#10h, P2OUT		
 
 loop:   
         jmp     loop
@@ -47,11 +47,11 @@ przycisk_reset:
 ;------------------------------------------------------------------------------
 ;       Wektory przerwan
 ;------------------------------------------------------------------------------
-	ORG	0FFFEh			; wektor resetu
-	DW	INIT			; adres poczatkowy pamieci programu
-        ORG     0FFEAh                  ; wektor przerwania 
+	ORG	0FFFEh			
+	DW	INIT			
+        ORG     0FFEAh                  
         DW      timer
-        ORG     0FFE8h                  ; wektor przerwania 
+        ORG     0FFE8h                  
         DW      przycisk_reset
 
 	END
