@@ -1,0 +1,194 @@
+```asm
+#include "msp430.h"                     ; #define controlled include file
+
+E       EQU BIT1
+RS      EQU BIT0
+DB4     EQU BIT2
+DB5     EQU BIT3
+DB6     EQU BIT4
+DB7     EQU BIT5
+DATA4   EQU 00111100b
+FuncSet EQU 00001000b
+DDRAMSet EQU 10000000b
+
+        NAME    main                    ; module name
+        PUBLIC  main                    ; make the main label visible
+        ORG     0FFFEh
+        DC16    init                    ; set reset vector to 'init' label             
+        ORG     0FFE8h                  ; interrupt vector
+        DW      PORT_P  
+        RSEG    CSTACK
+        RSEG    CODE
+
+init:   MOV     #SFE(CSTACK), SP
+
+main:   NOP
+        MOV.W   #WDTPW+WDTHOLD,&WDTCTL  ; Stop watchdog timer
+        BIS.B   #0FFh, P2DIR
+        BIS.B   #0FFh, P2OUT
+        BIS.B   #02h, &P1IE             ; enable interrupt for P1.1
+        MOV.B   #02h, &P1IES            ; falling edge for P1.1
+        BIS.W   #GIE, SR                ; enable global interrupts
+        BIS.B   #01h, &P1IE
+        BIS.B   #01h, &P1IES
+        MOV.W   #030h, R8
+        MOV.W   #030h, R9
+        CALL    #init_lcd
+
+        BIS.B   #02h, &P6SEL
+        MOV.W   #MSC + ADC12ON + REFON + REF2_5V , &ADC12CTL0
+        MOV.W   #SHP + CONSEQ1 , &ADC12CTL1
+        MOV.B   #SREF0 + INCH0 , &ADC12MCTL0
+        BIS.W   #ENC, &ADC12CTL0
+        BIS.W   #ADC12SC, &ADC12CTL0
+
+        BIS.B   #RS, P2OUT
+        MOV.B   #'V', R12
+        CALL    #send4bit
+        MOV.B   #'P', R12
+        CALL    #send4bit
+        MOV.B   #'O', R12
+        CALL    #send4bit
+        MOV.B   #'T', R12
+        CALL    #send4bit
+        MOV.B   #'=', R12
+        CALL    #send4bit
+
+        JMP $
+
+init_lcd:
+        CALL    #delay40ms
+        CLR.B   P2OUT
+        MOV     #3, R14
+rep3:   BIS.B   #DB4+DB5+E, P2OUT
+        CALL    #delay40ms
+        BIC.B   #E, P2OUT
+        CALL    #delay40ms
+        DEC     R14
+        JNZ     rep3
+        MOV.B   #DB5+E, P2OUT
+        CALL    #delay40ms
+        BIC.B   #E, P2OUT
+        CALL    #delay40ms
+
+        MOV.B   #00101100b, R12
+        CALL    #send4bit
+        MOV.B   #00001000b, R12
+        CALL    #send4bit
+
+        MOV.B   #E, P2OUT
+        CALL    #delay40ms
+        BIC.B   #E, P2OUT
+        CALL    #delay40ms
+        MOV.B   #DB4+E, P2OUT
+        CALL    #delay40ms
+        BIC.B   #E, P2OUT
+        CALL    #delay40ms
+
+        MOV.B   #00000110b, R12
+        CALL    #send4bit
+        MOV.B   #00001111b, R12
+        CALL    #send4bit
+        MOV.B   #DDRAMSet+2, R12
+        CALL    #send4bit 
+        RET
+
+send4bit:
+        MOV.B   R12, R13
+        BIS.B   #E, P2OUT
+        MOV.B   P2OUT, R11
+        BIC.B   #00111100b, R11
+        RRC.B   R12
+        RRC.B   R12
+        BIC.B   #11000011b, R12
+        BIS.B   R12, R11
+        MOV.B   R11, P2OUT
+        BIC.B   #E, P2OUT
+        CALL    #delay40us
+
+        MOV.B   R13, R12
+        BIS.B   #E, P2OUT
+        MOV.B   P2OUT, R11
+        BIC.B   #00111100b, R11
+        RLC.B   R12
+        RLC.B   R12
+        BIC.B   #11000011b, R12
+        BIS.B   R12, R11
+        MOV.B   R11, P2OUT
+        BIC.B   #E, P2OUT
+        CALL    #delay40us
+        RET
+
+delay40ms:
+        MOV     #10000, R15
+wait40ms:   
+        DEC     R15
+        JNZ     wait40ms
+        RET
+
+delay40us:
+        MOV     #5, R15
+wait40us:   
+        DEC     R15
+        JNZ     wait40us
+        RET
+
+PORT_P: 
+        BIC.B   #06h, P1IFG
+        BIT.B   #01h, P1IN
+        JZ      reset
+        BIT.B   #04h, P1IN
+        JZ      increase
+        JMP     decrease
+
+increase:
+        INC.B   R8
+        CMP     #03Ah, R8
+        JZ      resetzero
+
+        BIC.B   #RS, P2OUT
+        MOV.B   #DDRAMSet+51, R12
+        CALL    #send4bit
+        BIS.B   #RS, P2OUT
+        MOV.B   R9, R12
+        CALL    #send4bit
+        MOV.B   R8, R12
+        CALL    #send4bit
+        BIC.B   #06h, P1IFG
+        RETI
+
+decrease:
+        DEC.B   R8
+        CMP     #02Fh, R8
+        JZ      resetdziewiec
+
+        BIC.B   #RS, P2OUT
+        MOV.B   #DDRAMSet+51, R12
+        CALL    #send4bit
+        BIS.B   #RS, P2OUT
+        MOV.B   R9, R12
+        CALL    #send4bit
+        MOV.B   R8, R12
+        CALL    #send4bit
+        BIC.B   #06h, P1IFG
+        RETI
+
+resetzero:
+        INC.B   R9
+        MOV.B   #02Fh, R8
+        BIC.B   #06h, P1IFG
+        RETI
+
+resetdziewiec:
+        DEC.B   R9
+        MOV.B   #03Ah, R8
+        BIC.B   #06h, P1IFG
+        RETI
+
+reset:
+        MOV.B   #02Fh, R8
+        BIC.B   #06h, P1IFG
+        RETI
+
+        END
+```
