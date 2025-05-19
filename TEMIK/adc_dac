@@ -1,0 +1,114 @@
+#include "msp430.h"                     ; #define controlled include file
+
+E       EQU BIT1
+RS      EQU BIT0
+DB4     EQU BIT2
+DB5     EQU BIT3
+DB6     EQU BIT4
+DB7     EQU BIT5
+DATA4   EQU 00111100b
+FuncSet EQU 00001000b
+DDRAMSet EQU 10000000b
+
+
+        NAME    main                    ; module name
+
+        PUBLIC  main                    ; make the main label vissible
+                                        ; outside this module
+
+        ORG     0FFFEh
+        DC16    init                    ; set reset vector to 'init' label             
+        ORG     0FFEAh                  ;timer
+        DW      timer
+        ORG     0FFE8h                   ;przycisk
+        DW      PORT_P
+        
+        RSEG    CSTACK                  ; pre-declaration of segment
+        RSEG    CODE                    ; place program in 'CODE' segment
+
+init:   MOV     #SFE(CSTACK), SP        ; set up stack
+        mov.w   #TASSEL1|ID1|ID0|MC0|MC1, TACTL ;timer
+        mov.w   #0C8h, TACCR0
+main:   NOP                             ; main program
+        MOV.W   #WDTPW+WDTHOLD,&WDTCTL  ; Stop watchdog timer
+        BIS.B   #0FFh, P2DIR
+        BIS.B   #0FFh, P2OUT
+        ;-------------------------
+   
+        bis.b       #01h,&P1IE
+        bis.b       #01h,&P1IES
+        
+          mov.w #0FFFh, R6
+        mov.w   #0h, R8        ;ADC
+        mov.w   #0h, R9        ;R8*160
+        mov.w ADC12MEM0, R10
+        
+        
+        
+        
+        bis.b   #02h, &P6SEL
+        
+        
+        mov.w   #MSC + ADC12ON + REFON + REF2_5V , &ADC12CTL0
+        mov.W #SHP + CONSEQ1 , &ADC12CTL1
+        mov.b   #SREF0  + INCH0 , &ADC12MCTL0
+        bis.w #ENC, &ADC12CTL0
+        bis.w #ADC12SC, &ADC12CTL0
+	mov.w 	#DAC12IR + DAC12AMP0 + DAC12AMP1 + DAC12AMP2 + DAC12ENC , &DAC12_1CTL ; dac
+        
+        
+        mov.w #0h, R8
+        mov.w #0h, R9
+         mov.w #0h, R10
+         mov.w #0h, R7
+        ;-------------
+loop: 
+        jmp loop
+PORT_P: 
+        bic.b   #08h, P1IFG
+        bit.b   #01h, P4IN
+        jz     start
+        bit.b   #02h, P4IN
+        jz      wypiszdac
+        RETI
+start:
+        bis.w   #TAIE, TACTL
+        bic.w   #TAIFG, TACTL
+        mov.w #0h, R10
+        RETI
+
+
+timer:
+        cmp 00h , R10
+        jz timer2
+        jnz timer1
+        bic.w  #TAIFG, &TACTL
+        RETI
+timer2: ;wypisuje dac 
+         
+        mov.w 200h(R7), &DAC12_1DAT 
+        inc.B R7
+        inc.B R7
+        bic.w  #TAIFG, &TACTL
+        RETI
+timer1:  ;wpisuje adc
+        cmp 01F4h , R8
+        jz      koniec
+        mov.w ADC12MEM0 , R12
+        mov.w R12, 200h(R8)
+        inc.B R8
+        bic.w  #TAIFG, &TACTL
+        RETI
+koniec:
+        bic.w   #TAIE, TACTL
+        bic.w   #TAIFG, TACTL
+        Reti
+        
+wypiszdac:
+        mov.w #01h, R10
+        bis.w   #TAIE, TACTL
+        mov.w #0h, R8
+        mov.w #0h, R9
+        
+        
+        END
