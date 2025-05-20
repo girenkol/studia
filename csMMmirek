@@ -1,7 +1,12 @@
+komendy
+bind l "ent_fire smokegrenade_projectile kill; stopsound";
+alias "+switch" "lastinv"; alias "-switch" "lastinv"; bind "q" "+switch";
+
 1. execute A:
 CELEM JEST ZAJĘCIE A SItE CT
 +girenkol smoke schody+pod - drugi smoke od OSTREGO, flash side na wyjście (latarnia+daleki), 
 +tesla pali underwood
++michał pali ławke (anty-przebicie smokea)
 +entry Ostry _ Girenkol calluje entry, wychylacie po wybuchu pierwszego flasha
 +riffler drugi peak: michał, tesla
 +szymek pałac (PRIORYTET: trzymać przebicie smoka spod schodów, run nade bez wychylania w connector po sprawdzeniu upperwooda, nie zeskakiwać z drewna)
@@ -10,7 +15,7 @@ cz2 - zajęcie CT (nie przypisujemy bo sie ktoś wypier po drodze, każdy ma wie
 
 2. zajęcie MIDa:
 (bez insta smoka do okna)
-+girenkol smoke okno
++girenkol smoke okno / okno+mid (z jednego miejsca)
 +szymek smoke connect
 +entry ostry, flash za midboxy
 +riffler: michał, tesla
@@ -21,3 +26,17 @@ cz2 - zajęcie CT (nie przypisujemy bo sie ktoś wypier po drodze, każdy ma wie
 +michał i ostry grają connect po flashu
 +girenkol flash connect
 +szymek trzyma okno
+
+3. execute B:
++girenkol smoke okno+exit - drugi smoke od Szymka + dwa flashe górą
++ostry smoke łuk lewo, tesla smoke łuk prawo / alternatywnie: jeden smoke na shorta, gdzie niszczymy CTka z edwarda/filara
++michał trzyma smoke gaśniczy, flashuje site z łapy
++sytuacyjnie ktoś molo forest, molo backsite, zależne od tego czy kontrolujemy przód site, elektryka i car'a, żeby nie zginąć rzucając molo
++priorytet: wyczyścić site, backsite, forest, car
+>>> pozycje zagrożenia od CT: enemy przyklejony do ściany backsite, short na daleko/boost, ich molo na planta, boost na default
+>PO PLANCIE
++girenkol trzyma plecy + trzyma molo na pake, jedyny zostaje w apartach
++jeden siedzi skitrany cara + trzyma molo na głębokiego shorta (rzucasz z łapy nad balkonem apów z biegiem) / na extita / głęboko w okno od kuchni (ten ostatni zanim zejdzie smoke)
++jeden forest
++w sytuacji idealnej zostaje michałowi smoke, reszcie inny util, który służy do priorytetowo kontroli shorta lub robi za antypeak kuchni
+Duża szansa że po drodze się ktoś wywali więc to jest nie do rozpisania tym bardziej na tak ciasnym Bsite
