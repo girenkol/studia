@@ -1,6 +1,7 @@
 komendy
 bind l "ent_fire smokegrenade_projectile kill; stopsound";
 alias "+switch" "lastinv"; alias "-switch" "lastinv"; bind "q" "+switch";
+celownil: CSGO-fEwPZ-XMaTB-JpAXO-wKRUF-tULoD
 
 1. execute A:
 CELEM JEST ZAJĘCIE A SItE CT
