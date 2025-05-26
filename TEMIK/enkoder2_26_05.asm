@@ -9,7 +9,7 @@ INIT:	mov.w	#0A00h,SP		; inicjalizacja wsk. stosu
         bis.b	#08h,P1IES
         bis.w   #GIE, SR
         
-        mov.w   #TASSEL1 + ID1 + ID0 + MC0 + MC1 + TAIE, TACTL
+        mov.w   #TASSEL1 + ID1 + ID0 + MC0 + MC1 + TAIE, TACTL ;; POPRAWIC BO KROK TIMERA Z 2ms na 1ms
         mov.w   #064h, TACCR0
           
         mov.b   #00h, P2OUT
@@ -17,7 +17,7 @@ INIT:	mov.w	#0A00h,SP		; inicjalizacja wsk. stosu
         bis.b   #08h, P6SEL         ;ustawienie p6.3 wejscia adc
         bis.w   #MSC + REF2_5V + REFON, ADC12CTL0
         bis.w   #SHP + CONSEQ1, ADC12CTL1
-        bis.b   #SREF0 + INCH0, ADC12MCTL0
+        bis.b   #SREF0 + INCH0 + INCH1, ADC12MCTL0
         bis.w   #ADC12ON + ENC + ADC12SC, ADC12CTL0
         
         bis.w   #DAC12IR +  DAC12AMP0 + DAC12AMP1 + DAC12AMP2, DAC12_1CTL
@@ -34,6 +34,7 @@ INIT:	mov.w	#0A00h,SP		; inicjalizacja wsk. stosu
         bis.b   #01h,&P1IES
         
         bis.b   #010h, P4DIR
+        mov.b   #00h,   P4OUT
 loop: 
         jmp loop
 PORT_P: 
@@ -46,11 +47,13 @@ PORT_P:
         
 increase:                         
         add.w   #100d,  R8
-        mov.b #00h,P1IFG
+        ;mov.b   R8, P4OUT ;; TO NIEPOTRZEBNE jest blad odnoscnie wartosci przekazywanej do P4.4 (czyli nie zadaje wartosci zwiekszanej o tyle ile ruszam enkoderem), w funkcji decrease to samo
+        mov.b   #00h,P1IFG
         RETI                         
 
 decrease:                               
-        sub.w  #100d,  R8              
+        sub.w  #100d,  R8  
+        ;mov.b  R8, P4OUT ;; TEZ NIEPOTZREBNE tutaj jest druga czesc wypisywania
         mov.b #00h,P1IFG
         RETI        
        
@@ -60,15 +63,15 @@ Timer:
         
         ;porownanie
         cmp.w   ADC12MEM0,  R8
-        jge      zjedz  
-        jl     dojedz   
+        jhs      zjedz  
+        jlo     dojedz   
         RETI
         
 dojedz:
-        bis.b   #010h, P4OUT
+        bic.b   #010h, P4OUT
         RETI
 zjedz:
-        bic.b   #010h, P4OUT
+        bis.b   #010h, P4OUT
         RETI
 
 ;------------------------------------------------------------------------------
