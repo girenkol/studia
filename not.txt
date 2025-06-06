@@ -1,0 +1,4 @@
+cylindyk d3=0;
+sferyk d3=0 lub fi2=0 lub fi2 = +-pi;
+scara fi2=0 lub fi2=+-pi;
+kartezjan detJ=-1 brak;
