@@ -1,6 +1,6 @@
 // C++ code
 //
-const int led_1 = 11;
+const int led_1 = 11; //zmienic na: #define led_1 11
 const int led_2 = 10;
 const int led_3 = 9;
 const int trigPin = 6;
