@@ -14,7 +14,7 @@ from PyQt6.QtCore import Qt, QTimer
 TANK_CAPACITY = 1000.0   # Maksymalna pojemność zbiornika [L]
 PUMP_SMALL_CAP = 50.0    # Wydajność małej pompy [L/s]
 PUMP_BIG_CAP = 100.0     # Wydajność dużej pompy [L/s]
-MAX_INFLOW = 1000.0       # Maksymalny możliwy dopływ z rury [L/s]
+MAX_INFLOW = 500.0       # Maksymalny możliwy dopływ z rury [L/s]
 
 # Progi histerezy zaworu
 VALVE_CLOSE_LEVEL = 0.8 * TANK_CAPACITY  # Zamknij przy 80% (4000L)
@@ -84,6 +84,32 @@ class PLCController(threading.Thread):
         else:
             return True if p.czas_odpoczynku >= p.czas_odpoczynku_min else False
 
+    def wybierz_pompe_z_pary(self, id1, id2):
+        """
+        Wybiera pompę z pary (np. 1 i 3), która jest sprawna i ma MNIEJSZY czas pracy.
+        To zapewnia, że przy redukcji pomp wyłączana jest ta bardziej zużyta.
+        """
+        idx1 = id1 - 1
+        idx2 = id2 - 1
+        p1 = self.pompa_tablica[idx1]
+        p2 = self.pompa_tablica[idx2]
+        
+        ok1 = self.sprawdz_stan_pracy(id1)
+        ok2 = self.sprawdz_stan_pracy(id2)
+        
+        if ok1 and ok2:
+            # Obie sprawne -> wybierz tę z mniejszym czasem pracy (ta będzie działać)
+            if p1.czas_pracy <= p2.czas_pracy:
+                return idx1
+            else:
+                return idx2
+        elif ok1:
+            return idx1
+        elif ok2:
+            return idx2
+        else:
+            return None
+
     def run(self):
         last_time = time.perf_counter()
         target_cycle = 0.01
@@ -149,7 +175,7 @@ class PLCController(threading.Thread):
                         if self.przepelnienie and self.woda_delta < 0:
                             self.przepelnienie = False
 
-                    # --- 6. LOGIKA STEROWNIKA POMP ---
+                    # --- 6. LOGIKA STEROWNIKA POMP (ROTACJA) ---
                     self.flaga_tab = [False] * 4
                     pct = (self.zapelnienie / self.zapelnienie_max) * 100
 
@@ -157,30 +183,41 @@ class PLCController(threading.Thread):
                          for i in range(4): self.flaga_tab[i] = False
                     
                     elif pct > 70.0:
+                        # Poziom wysoki - włączamy wszystko co sprawne
                         if self.sprawdz_stan_pracy(1): self.flaga_tab[0] = True
                         if self.sprawdz_stan_pracy(3): self.flaga_tab[2] = True
                         if self.sprawdz_stan_pracy(2): self.flaga_tab[1] = True
                         if self.sprawdz_stan_pracy(4): self.flaga_tab[3] = True
                     
                     else:
+                        # Dobór pomp z uwzględnieniem czasu pracy
+                        # idx_mala to indeks najlepszej małej pompy (P1 lub P3)
+                        # idx_duza to indeks najlepszej dużej pompy (P2 lub P4)
+                        idx_mala = self.wybierz_pompe_z_pary(1, 3)
+                        idx_duza = self.wybierz_pompe_z_pary(2, 4)
+
                         if self.woda_in <= PUMP_SMALL_CAP:
-                            if self.sprawdz_stan_pracy(1): self.flaga_tab[0] = True
-                            elif self.sprawdz_stan_pracy(3): self.flaga_tab[2] = True
-                            elif self.sprawdz_stan_pracy(2) and self.pompa_tablica[1].czas_odpoczynku >= self.pompa_tablica[3].czas_odpoczynku:
-                                self.flaga_tab[1] = True
-                            elif self.sprawdz_stan_pracy(4): self.flaga_tab[3] = True
+                            # Potrzebna 1 mała
+                            if idx_mala is not None:
+                                self.flaga_tab[idx_mala] = True
+                            elif idx_duza is not None: # Jak brak małych, weź dużą
+                                self.flaga_tab[idx_duza] = True
 
                         elif self.woda_in <= PUMP_BIG_CAP:
-                            if self.sprawdz_stan_pracy(2): self.flaga_tab[1] = True
-                            elif self.sprawdz_stan_pracy(4): self.flaga_tab[3] = True
-                            elif self.sprawdz_stan_pracy(1): self.flaga_tab[0] = True
-                            elif self.sprawdz_stan_pracy(3): self.flaga_tab[2] = True
+                            # Potrzebna 1 duża
+                            if idx_duza is not None:
+                                self.flaga_tab[idx_duza] = True
+                            else:
+                                # Jak brak dużej, weź obie małe (jeśli sprawne)
+                                if self.sprawdz_stan_pracy(1): self.flaga_tab[0] = True
+                                if self.sprawdz_stan_pracy(3): self.flaga_tab[2] = True
                         
                         else:
-                            if self.sprawdz_stan_pracy(1): self.flaga_tab[0] = True
-                            elif self.sprawdz_stan_pracy(3): self.flaga_tab[2] = True
-                            if self.sprawdz_stan_pracy(2): self.flaga_tab[1] = True
-                            elif self.sprawdz_stan_pracy(4): self.flaga_tab[3] = True
+                            # Potrzebna 1 duża + 1 mała
+                            if idx_duza is not None:
+                                self.flaga_tab[idx_duza] = True
+                            if idx_mala is not None:
+                                self.flaga_tab[idx_mala] = True
 
                     # --- 7. AKTUALIZACJA WYJŚĆ ---
                     for i in range(4):
@@ -214,6 +251,14 @@ class MainWindow(QMainWindow):
         self.plc = controller
         self.setWindowTitle("PRZEPOMPOWNIA WODY - SOCR")
         self.resize(1000, 700)
+        
+        # Zmienne do skalowania czcionek
+        self.scale = 1.0
+        self.font_std = 12
+        self.font_med = 14
+        self.font_big = 16
+        self.padding_std = 10
+        self.padding_big = 15
         
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -269,6 +314,7 @@ class MainWindow(QMainWindow):
         self.tank_bar.setOrientation(Qt.Orientation.Vertical)
         self.tank_bar.setRange(0, int(TANK_CAPACITY))
         self.tank_bar.setTextVisible(False)
+        self.tank_bar.setFixedWidth(300) 
         
         self.lbl_tank_info = QLabel(f"Poziom: 0 / {int(TANK_CAPACITY)} Litrów")
         self.lbl_overflow = QLabel("STAN: OK")
@@ -328,93 +374,60 @@ class MainWindow(QMainWindow):
             
         layout.addLayout(pumps_layout, 1)
 
-        # Inicjalne style
-        self.update_styles()
+        # Inicjalne przeliczenie stylów
+        self.calculate_fonts()
+        self.update_static_styles()
 
         self.gui_timer = QTimer()
         self.gui_timer.timeout.connect(self.update_gui)
         self.gui_timer.start(50) 
 
-    # --- ZDARZENIE ZMIANY ROZMIARU OKNA ---
+    # --- SKALOWANIE OKNA ---
     def resizeEvent(self, event):
-        # Wywołaj aktualizację stylów przy każdej zmianie rozmiaru
-        self.update_styles()
+        """Metoda wywoływana przy zmianie rozmiaru okna"""
+        self.calculate_fonts()
+        self.update_static_styles()
         super().resizeEvent(event)
 
-    def update_styles(self):
-        """Funkcja przeliczająca rozmiary czcionek i elementów na podstawie wielkości okna"""
+    def calculate_fonts(self):
+        """Przelicza wielkość czcionek na podstawie szerokości okna"""
+        base_width = 1000.0
+        self.scale = self.width() / base_width
+        if self.scale < 0.6: self.scale = 0.6 
+
+        self.font_std = int(12 * self.scale)
+        self.font_med = int(14 * self.scale)
+        self.font_big = int(16 * self.scale)
+        self.padding_std = int(10 * self.scale)
+        self.padding_big = int(15 * self.scale)
+
+    def update_static_styles(self):
+        """Aktualizuje style elementów statycznych"""
+        font_title_css = f"font-size: {self.font_med}px;"
+        self.lbl_panel_title.setStyleSheet(font_title_css)
+        self.lbl_tank_title.setStyleSheet(font_title_css)
+        self.lbl_pump_title.setStyleSheet(font_title_css)
         
-        # Oblicz skalę (bazowa szerokość to 1000px)
-        scale = self.width() / 1000.0
-        # Zabezpieczenie przed zbyt małą skalą
-        if scale < 0.5: scale = 0.5
-
-        # Obliczone rozmiary czcionek
-        font_norm = int(12 * scale)
-        font_med = int(14 * scale)
-        font_big = int(16 * scale)
-        font_huge = int(18 * scale)
-        padding_btn = int(10 * scale)
-        padding_big = int(15 * scale)
-
-        # 1. Start Button
-        self.btn_start.setStyleSheet(f"""
-            QPushButton {{ padding: {padding_big}px; font-size: {font_big}px; font-weight: bold; background-color: #cccccc; color: black; }}
-            QPushButton:checked {{ background-color: #006600; color: white; }}
-        """)
+        font_std_css = f"font-size: {self.font_std}px;"
+        font_med_bold_css = f"font-size: {self.font_med}px; font-weight: bold;"
         
-        # 2. Zawór Button
-        self.btn_valve.setStyleSheet(f"""
-            QPushButton {{ padding: {padding_btn}px; font-size: {font_norm}px; background-color: #ccffcc; color: black; }}
-            QPushButton:checked {{ background-color: #cc0000; color: white; }}
-        """)
+        self.lbl_flow.setStyleSheet(font_std_css)
+        self.lbl_actual_in.setStyleSheet(f"color: white; {font_med_bold_css}")
+        self.lbl_actual_out.setStyleSheet(font_std_css)
+        self.lbl_tank_info.setStyleSheet(font_std_css)
 
-        # 3. Status Zaworu
-        status_color = "#cc0000" if "ZAMKNIĘTY" in self.lbl_valve_status.text() else ("#00cc00" if "OTWARTY" in self.lbl_valve_status.text() else "#99ff99")
-        text_color = "white" if "ZAMKNIĘTY" in self.lbl_valve_status.text() else ("white" if "OTWARTY" in self.lbl_valve_status.text() else "black")
-        
-        # Odświeżamy kolor w update_gui, tutaj tylko rozmiar
-        self.lbl_valve_status.setStyleSheet(f"""
-            background-color: {status_color}; color: {text_color}; padding: {int(8*scale)}px; border: {max(1, int(2*scale))}px solid gray; font-weight: bold; font-size: {font_med}px;
-        """)
-
-        # 4. Labele informacyjne
-        self.lbl_flow.setStyleSheet(f"font-size: {font_norm}px;")
-        self.lbl_actual_in.setStyleSheet(f"color: blue; font-weight: bold; font-size: {font_med}px;")
-        self.lbl_actual_out.setStyleSheet(f"font-size: {font_med}px;")
-        self.lbl_panel_title.setStyleSheet(f"font-size: {font_med}px;")
-        self.lbl_tank_title.setStyleSheet(f"font-size: {font_med}px;")
-        self.lbl_pump_title.setStyleSheet(f"font-size: {font_med}px;")
-
-        # 5. Zbiornik (Pasek) - skalowanie szerokości
-        tank_width = int(300 * scale)
+        tank_width = int(300 * self.scale)
         self.tank_bar.setFixedWidth(tank_width)
         self.tank_bar.setStyleSheet(f"""
-            QProgressBar {{ border: {max(2, int(3*scale))}px solid #555; border-radius: {int(8*scale)}px; background-color: #f0f0f0; }}
-            QProgressBar::chunk {{ background-color: #0099ff; border-radius: {int(4*scale)}px; }}
+            QProgressBar {{ border: 3px solid #555; border-radius: 8px; background-color: #f0f0f0; }}
+            QProgressBar::chunk {{ background-color: #0099ff; border-radius: 4px; }}
         """)
-        self.lbl_tank_info.setStyleSheet(f"font-size: {font_med}px;")
-        
-        # 6. Status Alarmu
-        overflow_bg = "red" if "PRZEPEŁNIENIE" in self.lbl_overflow.text() else "transparent"
-        overflow_fg = "white" if "PRZEPEŁNIENIE" in self.lbl_overflow.text() else "green"
-        self.lbl_overflow.setStyleSheet(f"color: {overflow_fg}; background-color: {overflow_bg}; font-weight: bold; font-size: {font_huge}px; border: {max(1, int(2*scale))}px solid green; padding: {int(5*scale)}px;")
 
-        # 7. Pompy (Pętla po widgetach)
-        for i, widgets in enumerate(self.pump_widgets):
-            widgets["title"].setStyleSheet(f"font-weight: bold; font-size: {font_norm}px;")
-            widgets["stats"].setStyleSheet(f"font-size: {int(11*scale)}px;")
-            
-            # Status pompy (kolory odświeżane w update_gui, tu tylko rozmiar)
-            current_status = widgets["status"].text()
-            widgets["status"].setStyleSheet(f"""
-                padding: {int(8*scale)}px; font-weight: bold; border-radius: {int(4*scale)}px; font-size: {font_norm}px;
-                background-color: {'#00ff00' if current_status=='PRACA' else ('orange' if 'BŁĄD' in current_status else '#aa0000')};
-                color: {'black' if current_status=='PRACA' or 'BŁĄD' in current_status else 'white'};
-            """)
-            
+        for widgets in self.pump_widgets:
+            widgets["title"].setStyleSheet(f"font-weight: bold; {font_std_css}")
+            widgets["stats"].setStyleSheet(f"font-size: {int(11 * self.scale)}px;")
             widgets["temp_btn"].setStyleSheet(f"""
-                QPushButton {{ background-color: #ffcccc; color: black; border: 1px solid red; font-size: {int(11*scale)}px; padding: {int(5*scale)}px; }}
+                QPushButton {{ background-color: #ffcccc; color: black; border: 1px solid red; font-size: {int(11*self.scale)}px; padding: {int(5*self.scale)}px; }}
                 QPushButton:checked {{ background-color: red; color: white; font-weight: bold; }}
             """)
 
@@ -451,34 +464,43 @@ class MainWindow(QMainWindow):
             pct = (self.plc.zapelnienie / TANK_CAPACITY) * 100
             self.lbl_tank_info.setText(f"Poziom: {self.plc.zapelnienie:.0f} L  ({pct:.1f}%)")
             
-            # Aby style się nie "psuły" przy odświeżaniu tekstu, wywołujemy update_styles
-            # Ale to byłoby zbyt ciężkie robić to co 50ms.
-            # Dlatego tutaj aktualizujemy TYLKO te elementy, których kolor zależy od stanu logicznego
-            # a rozmiar bierzemy z ostatniej znanej skali (lub wymuszamy przeliczenie przy zmianie stanu)
-            
-            scale = self.width() / 1000.0
-            font_norm = int(12 * scale)
-            font_med = int(14 * scale)
-            font_huge = int(18 * scale)
+            # Styl przycisku Start
+            if self.plc.start_stop:
+                self.btn_start.setStyleSheet(f"""
+                    QPushButton {{ padding: {self.padding_big}px; font-weight: bold; font-size: {self.font_big}px; background-color: #006600; color: white; }}
+                """)
+            else:
+                self.btn_start.setStyleSheet(f"""
+                    QPushButton {{ padding: {self.padding_big}px; font-weight: bold; font-size: {self.font_big}px; background-color: #cccccc; color: black; }}
+                """)
 
-            # Status zaworu
+            # Styl przycisku Zawór (Ręczny)
+            val_btn_color = "#cc0000" if self.btn_valve.isChecked() else "#ccffcc"
+            val_btn_text = "white" if self.btn_valve.isChecked() else "black"
+            self.btn_valve.setStyleSheet(f"""
+                QPushButton {{ padding: {self.padding_std}px; font-size: {self.font_std}px; background-color: {val_btn_color}; color: {val_btn_text}; }}
+            """)
+
+            # Status zaworu (Wyświetlacz)
             if self.plc.zawor:
                 self.lbl_valve_status.setText("ZAWÓR: ZAMKNIĘTY")
-                self.lbl_valve_status.setStyleSheet(f"background-color: #cc0000; color: white; padding: {int(8*scale)}px; font-weight: bold; border: 2px solid black; font-size: {font_med}px;")
+                self.lbl_valve_status.setStyleSheet(f"background-color: #cc0000; color: white; padding: {self.padding_std}px; font-weight: bold; border: 2px solid black; font-size: {self.font_med}px;")
                 
-                if self.plc.flaga_przepelnienia:
+                # Tekst na przycisku ręcznym (Priorytet ręcznego sterowania w wyświetlaniu)
+                if self.plc.zawor_wiz:
+                    self.btn_valve.setText("ŻĄDANIE: OTWÓRZ")
+                elif self.plc.flaga_przepelnienia:
                      self.btn_valve.setText("BLOKADA (AWARIA!)")
                 elif self.plc.auto_blokada:
-                     self.btn_valve.setText("BLOKADA (POZIOM > 80%)")
-                     if self.plc.zapelnienie < 0.8 * TANK_CAPACITY:
-                          self.btn_valve.setText("CZEKAM NA SPADEK < 70%")
-                elif not self.plc.zawor_wiz:
-                     pass
+                     if self.plc.zapelnienie >= 0.8 * TANK_CAPACITY:
+                         self.btn_valve.setText("BLOKADA (POZIOM > 80%)")
+                     else:
+                         self.btn_valve.setText("CZEKAM NA SPADEK < 70%")
             else:
                 self.lbl_valve_status.setText("ZAWÓR: OTWARTY")
-                self.lbl_valve_status.setStyleSheet(f"background-color: #00cc00; color: white; padding: {int(8*scale)}px; font-weight: bold; border: 2px solid black; font-size: {font_med}px;")
+                self.lbl_valve_status.setStyleSheet(f"background-color: #00cc00; color: white; padding: {self.padding_std}px; font-weight: bold; border: 2px solid black; font-size: {self.font_med}px;")
                 if not self.plc.zawor_wiz:
-                    self.btn_valve.setText("ŻĄDANIE: OTWÓRZ")
+                    self.btn_valve.setText("ŻĄDANIE: ZAMKNIJ")
 
             # Przepływy
             self.lbl_actual_in.setText(f"Aktualny dopływ: {self.plc.woda_in:.1f} L/s")
@@ -487,24 +509,24 @@ class MainWindow(QMainWindow):
             # Alarm
             if self.plc.flaga_przepelnienia or self.plc.przepelnienie:
                 self.lbl_overflow.setText("!!! PRZEPEŁNIENIE !!!")
-                self.lbl_overflow.setStyleSheet(f"color: white; background-color: red; font-weight: bold; font-size: {font_huge}px; border: 3px solid black; padding: {int(5*scale)}px;")
+                self.lbl_overflow.setStyleSheet(f"color: white; background-color: red; font-weight: bold; font-size: {self.font_big}px; border: 3px solid black; padding: {self.padding_std}px;")
             else:
                 self.lbl_overflow.setText("STAN: OK")
-                self.lbl_overflow.setStyleSheet(f"color: green; font-weight: bold; font-size: {font_huge}px; border: 2px solid green; padding: {int(5*scale)}px;")
+                self.lbl_overflow.setStyleSheet(f"color: green; font-weight: bold; font-size: {self.font_big}px; border: 2px solid green; padding: {self.padding_std}px;")
 
             # Pompy
             for i, p in enumerate(self.plc.pompa_tablica):
                 widgets = self.pump_widgets[i]
                 if p.czy_dziala:
                     widgets["status"].setText("PRACA")
-                    widgets["status"].setStyleSheet(f"background-color: #00ff00; color: black; padding: {int(8*scale)}px; font-weight: bold; border: 1px solid black; font-size: {font_norm}px;")
+                    widgets["status"].setStyleSheet(f"background-color: #00ff00; color: black; padding: {self.padding_std}px; font-weight: bold; border: 1px solid black; font-size: {self.font_std}px;")
                 else:
                     if p.czujnik_temp:
                          widgets["status"].setText("BŁĄD TEMP")
-                         widgets["status"].setStyleSheet(f"background-color: orange; color: black; padding: {int(8*scale)}px; font-weight: bold; border: 1px solid black; font-size: {font_norm}px;")
+                         widgets["status"].setStyleSheet(f"background-color: orange; color: black; padding: {self.padding_std}px; font-weight: bold; border: 1px solid black; font-size: {self.font_std}px;")
                     else:
                         widgets["status"].setText("STOP")
-                        widgets["status"].setStyleSheet(f"background-color: #aa0000; color: white; padding: {int(8*scale)}px; font-weight: bold; border: 1px solid black; font-size: {font_norm}px;")
+                        widgets["status"].setStyleSheet(f"background-color: #aa0000; color: white; padding: {self.padding_std}px; font-weight: bold; border: 1px solid black; font-size: {self.font_std}px;")
                 
                 widgets["stats"].setText(f"Praca: {p.czas_pracy:.1f}s\nPrzerwa: {p.czas_odpoczynku:.1f}s")
 
