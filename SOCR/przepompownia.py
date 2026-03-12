@@ -1,4 +1,4 @@
-import sys #W PRZYPADKU GDY JEST 110 WLOTU CZASAMI DOCHODZI DO SUCHOBIEGU - POPRAWIĆ!!!!!!
+import sys 
 import time
 import threading
 from dataclasses import dataclass
@@ -11,14 +11,14 @@ from PyQt6.QtCore import Qt, QTimer
 # 1. KONFIGURACJA FIZYCZNA OBIEKTU
 # ==========================================
 
-TANK_CAPACITY = 1000.0   # Maksymalna pojemność zbiornika [L]
+TANK_CAPACITY = 5000.0   # Maksymalna pojemność zbiornika [L]
 PUMP_SMALL_CAP = 50.0    # Wydajność małej pompy [L/s]
 PUMP_BIG_CAP = 100.0     # Wydajność dużej pompy [L/s]
-MAX_INFLOW = 500.0       # Maksymalny możliwy dopływ z rury [L/s]
+MAX_INFLOW = 300.0       # Maksymalny możliwy dopływ z rury [L/s]
 
 # Progi histerezy zaworu
-VALVE_CLOSE_LEVEL = 0.8 * TANK_CAPACITY  # Zamknij przy 80% (4000L)
-VALVE_OPEN_LEVEL = 0.7 * TANK_CAPACITY   # Otwórz dopiero jak spadnie do 70% (3500L)
+VALVE_CLOSE_LEVEL = 0.9 * TANK_CAPACITY  # Zamknij przy 90%
+VALVE_OPEN_LEVEL = 0.8 * TANK_CAPACITY   # Otwórz dopiero jak spadnie do 80%
 
 # ==========================================
 # 2. DEFINICJE STRUKTUR DANYCH
@@ -31,8 +31,8 @@ class PompaStruct:
     czy_dziala: bool = False
     czas_pracy: float = 0.0
     czas_odpoczynku: float = 5.0 
-    czas_odpoczynku_min: float = 5.0
-    czas_pracy_max: float = 20.0
+    czas_odpoczynku_min: float = 10.0
+    czas_pracy_max: float = 30.0
     czujnik_temp: bool = False 
 
 # ==========================================
@@ -55,9 +55,10 @@ class PLCController(threading.Thread):
         
         # Wejścia/Wyjścia
         self.start_stop = False
-        self.zawor = False     # True = ZAMKNIĘTY (BLOKADA)
-        self.zawor_wiz = False # True = ZAMKNIĘTY PRZEZ UŻYTKOWNIKA
-        self.auto_blokada = False # Flaga wewnętrzna histerezy poziomu
+        self.zawor = False     
+        self.zawor_wiz = False 
+        self.auto_blokada = False 
+        self.blokada_suchobiegu = False 
         
         self.woda_in = 0.0     
         self.woda_in_wiz = 0.0 
@@ -85,10 +86,6 @@ class PLCController(threading.Thread):
             return True if p.czas_odpoczynku >= p.czas_odpoczynku_min else False
 
     def wybierz_pompe_z_pary(self, id1, id2):
-        """
-        Wybiera pompę z pary (np. 1 i 3), która jest sprawna i ma MNIEJSZY czas pracy.
-        To zapewnia, że przy redukcji pomp wyłączana jest ta bardziej zużyta.
-        """
         idx1 = id1 - 1
         idx2 = id2 - 1
         p1 = self.pompa_tablica[idx1]
@@ -98,7 +95,6 @@ class PLCController(threading.Thread):
         ok2 = self.sprawdz_stan_pracy(id2)
         
         if ok1 and ok2:
-            # Obie sprawne -> wybierz tę z mniejszym czasem pracy (ta będzie działać)
             if p1.czas_pracy <= p2.czas_pracy:
                 return idx1
             else:
@@ -121,6 +117,13 @@ class PLCController(threading.Thread):
             if dt > 1.0: dt = target_cycle 
 
             with self.lock:
+                
+                # --- 0. ZABEZPIECZENIE SPRZĘTOWE: NATYCHMIASTOWY STOP PRZY AWARII TERMICZNEJ ---
+                for i in range(4):
+                    if self.pompa_tablica[i].czujnik_temp and self.pompa_tablica[i].czy_dziala:
+                        self.pompa_tablica[i].czy_dziala = False
+                        self.flaga_tab[i] = False
+
                 # --- 1. OBSŁUGA FLAGI PRZEPEŁNIENIA ---
                 if self.przepelnienie:
                     self.flaga_przepelnienia = True
@@ -178,59 +181,76 @@ class PLCController(threading.Thread):
                     # --- 6. LOGIKA STEROWNIKA POMP (ROTACJA) ---
                     self.flaga_tab = [False] * 4
                     pct = (self.zapelnienie / self.zapelnienie_max) * 100
-
-                    if pct < 10.0:
-                         for i in range(4): self.flaga_tab[i] = False
                     
+                    # 1. Zabezpieczenie przed suchobiegiem (Twardy stop poniżej 10%)
+                    if pct <= 10.0:
+                        self.blokada_suchobiegu = True 
+                    elif pct >= 11.0: # Histereza: puszczamy przy 11%
+                        self.blokada_suchobiegu = False 
+
+                    if self.blokada_suchobiegu:
+                        for i in range(4): 
+                            self.flaga_tab[i] = False
+                            self.pompa_tablica[i].czy_dziala = False 
+                    
+                    # 2. Szybkie ratowanie przed przepełnieniem (powyżej 70%)
                     elif pct > 70.0:
-                        # Poziom wysoki - włączamy wszystko co sprawne
                         if self.sprawdz_stan_pracy(1): self.flaga_tab[0] = True
                         if self.sprawdz_stan_pracy(3): self.flaga_tab[2] = True
                         if self.sprawdz_stan_pracy(2): self.flaga_tab[1] = True
                         if self.sprawdz_stan_pracy(4): self.flaga_tab[3] = True
                     
+                    # 3. Normalna praca (Kaskada)
                     else:
-                        # Dobór pomp z uwzględnieniem czasu pracy
-                        # idx_mala to indeks najlepszej małej pompy (P1 lub P3)
-                        # idx_duza to indeks najlepszej dużej pompy (P2 lub P4)
                         idx_mala = self.wybierz_pompe_z_pary(1, 3)
                         idx_duza = self.wybierz_pompe_z_pary(2, 4)
+                        woda_wymagana = self.woda_in_wiz
+                        
+                        if self.auto_blokada:
+                            woda_wymagana = PUMP_BIG_CAP 
 
-                        if self.woda_in <= PUMP_SMALL_CAP:
-                            # Potrzebna 1 mała
-                            if idx_mala is not None:
-                                self.flaga_tab[idx_mala] = True
-                            elif idx_duza is not None: # Jak brak małych, weź dużą
-                                self.flaga_tab[idx_duza] = True
-
-                        elif self.woda_in <= PUMP_BIG_CAP:
-                            # Potrzebna 1 duża
-                            if idx_duza is not None:
-                                self.flaga_tab[idx_duza] = True
+                        if woda_wymagana <= PUMP_SMALL_CAP: 
+                            if idx_mala is not None: self.flaga_tab[idx_mala] = True
+                            elif idx_duza is not None: self.flaga_tab[idx_duza] = True
+                        elif woda_wymagana <= PUMP_BIG_CAP: 
+                            if idx_duza is not None: self.flaga_tab[idx_duza] = True
                             else:
-                                # Jak brak dużej, weź obie małe (jeśli sprawne)
                                 if self.sprawdz_stan_pracy(1): self.flaga_tab[0] = True
                                 if self.sprawdz_stan_pracy(3): self.flaga_tab[2] = True
-                        
-                        else:
-                            # Potrzebna 1 duża + 1 mała
-                            if idx_duza is not None:
-                                self.flaga_tab[idx_duza] = True
-                            if idx_mala is not None:
-                                self.flaga_tab[idx_mala] = True
+                        else: 
+                            if idx_duza is not None: self.flaga_tab[idx_duza] = True
+                            if idx_mala is not None: self.flaga_tab[idx_mala] = True
 
                     # --- 7. AKTUALIZACJA WYJŚĆ ---
+                    if not self.blokada_suchobiegu:
+                        # KLUCZOWA POPRAWKA: Jeśli poziom jest niski (poniżej 15%), 
+                        # pozwól pompom wystartować NATYCHMIAST (ignoruj time_wait)
+                        bypass_timer = True if pct < 15.0 else False
+
+                        if self.time_wait <= 0 or bypass_timer:
+                            przelaczono = False
+                            # Wyłączanie
+                            for i in range(4):
+                                if not self.flaga_tab[i] and self.pompa_tablica[i].czy_dziala:
+                                    self.pompa_tablica[i].czy_dziala = False
+                                    if not bypass_timer: self.time_wait = 2 * self.time_wait_max
+                                    przelaczono = True
+                                    break 
+                            # Włączanie
+                            if not przelaczono:
+                                for i in range(4):
+                                    if self.flaga_tab[i] and not self.pompa_tablica[i].czy_dziala:
+                                        self.pompa_tablica[i].czy_dziala = True
+                                        if not bypass_timer: self.time_wait = 2 * self.time_wait_max
+                                        break
+
+                    # --- ZLICZANIE CZASÓW ZUŻYCIA ---
                     for i in range(4):
-                        if self.flaga_tab[i] != self.pompa_tablica[i].czy_dziala:
-                            if self.time_wait <= 0:
-                                self.pompa_tablica[i].czy_dziala = self.flaga_tab[i]
-                                self.time_wait = 2 * self.time_wait_max
-                        
                         if self.pompa_tablica[i].czy_dziala:
                             self.pompa_tablica[i].czas_pracy += dt
                             self.pompa_tablica[i].czas_odpoczynku = 0
                         else:
-                            self.pompa_tablica[i].czas_pracy = 0
+                            self.pompa_tablica[i].czas_pracy = 0.0 
                             self.pompa_tablica[i].czas_odpoczynku += dt
 
                     if self.time_wait > 0:
@@ -287,7 +307,7 @@ class MainWindow(QMainWindow):
 
         self.lbl_flow = QLabel("Zadany dopływ: 0 L/s")
         self.slider_flow = QSlider(Qt.Orientation.Horizontal)
-        self.slider_flow.setRange(0, 100)
+        self.slider_flow.setRange(0, int(MAX_INFLOW))
         self.slider_flow.valueChanged.connect(self.update_flow_input)
         
         self.lbl_actual_in = QLabel("Aktualny dopływ (Rura): 0.0 L/s")
@@ -309,7 +329,7 @@ class MainWindow(QMainWindow):
         tank_layout = QVBoxLayout(self.tank_panel)
         tank_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter) 
         
-        self.lbl_tank_title = QLabel("<b>ZBIORNIK (1000L)</b>")
+        self.lbl_tank_title = QLabel("<b>ZBIORNIK (5000L)</b>")
         self.tank_bar = QProgressBar()
         self.tank_bar.setOrientation(Qt.Orientation.Vertical)
         self.tank_bar.setRange(0, int(TANK_CAPACITY))
@@ -330,7 +350,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(top_layout, 2)
         
         # --- PANEL DOLNY - POMPY ---
-        self.lbl_pump_title = QLabel("<b>ZESTAW POMPOWY</b>")
+        self.lbl_pump_title = QLabel("<b>ZESTAW POMP</b>")
         layout.addWidget(self.lbl_pump_title)
         pumps_layout = QGridLayout()
         self.pump_widgets = []
@@ -374,7 +394,6 @@ class MainWindow(QMainWindow):
             
         layout.addLayout(pumps_layout, 1)
 
-        # Inicjalne przeliczenie stylów
         self.calculate_fonts()
         self.update_static_styles()
 
@@ -384,13 +403,11 @@ class MainWindow(QMainWindow):
 
     # --- SKALOWANIE OKNA ---
     def resizeEvent(self, event):
-        """Metoda wywoływana przy zmianie rozmiaru okna"""
         self.calculate_fonts()
         self.update_static_styles()
         super().resizeEvent(event)
 
     def calculate_fonts(self):
-        """Przelicza wielkość czcionek na podstawie szerokości okna"""
         base_width = 1000.0
         self.scale = self.width() / base_width
         if self.scale < 0.6: self.scale = 0.6 
@@ -402,7 +419,6 @@ class MainWindow(QMainWindow):
         self.padding_big = int(15 * self.scale)
 
     def update_static_styles(self):
-        """Aktualizuje style elementów statycznych"""
         font_title_css = f"font-size: {self.font_med}px;"
         self.lbl_panel_title.setStyleSheet(font_title_css)
         self.lbl_tank_title.setStyleSheet(font_title_css)
@@ -412,7 +428,7 @@ class MainWindow(QMainWindow):
         font_med_bold_css = f"font-size: {self.font_med}px; font-weight: bold;"
         
         self.lbl_flow.setStyleSheet(font_std_css)
-        self.lbl_actual_in.setStyleSheet(f"color: white; {font_med_bold_css}")
+        self.lbl_actual_in.setStyleSheet(f"color: blue; {font_med_bold_css}") 
         self.lbl_actual_out.setStyleSheet(font_std_css)
         self.lbl_tank_info.setStyleSheet(font_std_css)
 
@@ -448,7 +464,7 @@ class MainWindow(QMainWindow):
                 self.btn_valve.setText("ŻĄDANIE: ZAMKNIJ")
 
     def update_flow_input(self, value):
-        flow_l_s = (value / 100.0) * MAX_INFLOW
+        flow_l_s = value
         with self.plc.lock:
             self.plc.woda_in_wiz = flow_l_s
         self.lbl_flow.setText(f"Zadany dopływ: {flow_l_s:.1f} L/s")
@@ -486,16 +502,16 @@ class MainWindow(QMainWindow):
                 self.lbl_valve_status.setText("ZAWÓR: ZAMKNIĘTY")
                 self.lbl_valve_status.setStyleSheet(f"background-color: #cc0000; color: white; padding: {self.padding_std}px; font-weight: bold; border: 2px solid black; font-size: {self.font_med}px;")
                 
-                # Tekst na przycisku ręcznym (Priorytet ręcznego sterowania w wyświetlaniu)
+                # Tekst na przycisku ręcznym
                 if self.plc.zawor_wiz:
                     self.btn_valve.setText("ŻĄDANIE: OTWÓRZ")
                 elif self.plc.flaga_przepelnienia:
                      self.btn_valve.setText("BLOKADA (AWARIA!)")
                 elif self.plc.auto_blokada:
-                     if self.plc.zapelnienie >= 0.8 * TANK_CAPACITY:
-                         self.btn_valve.setText("BLOKADA (POZIOM > 80%)")
+                     if self.plc.zapelnienie >= 0.9 * TANK_CAPACITY:
+                         self.btn_valve.setText("BLOKADA (POZIOM > 90%)")
                      else:
-                         self.btn_valve.setText("CZEKAM NA SPADEK < 70%")
+                         self.btn_valve.setText("CZEKAM NA SPADEK < 80%")
             else:
                 self.lbl_valve_status.setText("ZAWÓR: OTWARTY")
                 self.lbl_valve_status.setStyleSheet(f"background-color: #00cc00; color: white; padding: {self.padding_std}px; font-weight: bold; border: 2px solid black; font-size: {self.font_med}px;")
