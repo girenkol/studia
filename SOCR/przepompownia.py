@@ -73,7 +73,7 @@ class PLCController(threading.Thread):
         self.licznik = 0.0
         
         self.time_wait = 0.0
-        self.time_wait_max = 0.5
+        self.time_wait_max = 0.1
         self.flaga_tab = [False] * 4 
 
     def sprawdz_stan_pracy(self, index):
@@ -374,7 +374,7 @@ class MainWindow(QMainWindow):
             lbl_stats = QLabel("Praca: 0.0s\nPrzerwa: 5.0s")
             lbl_stats.setAlignment(Qt.AlignmentFlag.AlignCenter)
             
-            btn_temp = QPushButton("AWARIA")
+            btn_temp = QPushButton("TEMP")
             btn_temp.setCheckable(True)
             btn_temp.clicked.connect(lambda checked, idx=i: self.set_temp_error(idx, checked))
 
