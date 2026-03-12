@@ -1,4 +1,4 @@
-import sys
+import sys #W PRZYPADKU GDY JEST 110 WLOTU CZASAMI DOCHODZI DO SUCHOBIEGU - POPRAWIĆ!!!!!!
 import time
 import threading
 from dataclasses import dataclass
