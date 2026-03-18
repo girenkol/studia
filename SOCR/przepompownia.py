@@ -2,7 +2,7 @@ import sys
 import time
 import threading
 from dataclasses import dataclass
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,       # DODAĆ PRZYCISK AWARII ZAWORU, ŻEBY TEŻ DAŁO SIĘ ZROBIĆ PRZEPEŁNIENIE
                              QHBoxLayout, QLabel, QProgressBar, QPushButton, 
                              QSlider, QGridLayout, QFrame)
 from PyQt6.QtCore import Qt, QTimer
@@ -16,9 +16,8 @@ PUMP_SMALL_CAP = 50.0    # Wydajność małej pompy [L/s]
 PUMP_BIG_CAP = 100.0     # Wydajność dużej pompy [L/s]
 MAX_INFLOW = 300.0       # Maksymalny możliwy dopływ z rury [L/s]
 
-# Progi histerezy zaworu
-VALVE_CLOSE_LEVEL = 0.9 * TANK_CAPACITY  # Zamknij przy 90%
-VALVE_OPEN_LEVEL = 0.8 * TANK_CAPACITY   # Otwórz dopiero jak spadnie do 80%
+VALVE_CLOSE_LEVEL = 0.9 * TANK_CAPACITY  # Zamknij przy 90% - górny próg histerezy zaworu
+VALVE_OPEN_LEVEL = 0.8 * TANK_CAPACITY   # Otwórz dopiero jak spadnie do 80% - dolny próg histerezy zaworu
 
 # ==========================================
 # 2. DEFINICJE STRUKTUR DANYCH
@@ -27,19 +26,19 @@ VALVE_OPEN_LEVEL = 0.8 * TANK_CAPACITY   # Otwórz dopiero jak spadnie do 80%
 @dataclass
 class PompaStruct:
     id: int
-    wydajnosc: float       # [L/s]
+    wydajnosc: float                    # [L/s]
     czy_dziala: bool = False
     czas_pracy: float = 0.0
     czas_odpoczynku: float = 5.0 
-    czas_odpoczynku_min: float = 10.0
-    czas_pracy_max: float = 30.0
-    czujnik_temp: bool = False 
+    czas_odpoczynku_min: float = 5.0   # Minimalny czas odpoczynku pompy [s]
+    czas_pracy_max: float = 15.0        # Nieprzekraczalny czas pracy pompy [s]
+    czujnik_temp: bool = False          # Błąd temperaturowy/przegrzanie
 
 # ==========================================
-# 3. LOGIKA STEROWNIKA (Wątek "PLC_PRG")
+# 3. LOGIKA STEROWNIKA
 # ==========================================
 
-class PLCController(threading.Thread):
+class PLCController(threading.Thread):      # Klasa dziedzicząca po threading.Thread - działanie jako osobny wątek
     def __init__(self):
         super().__init__()
         self.daemon = True 
@@ -57,22 +56,22 @@ class PLCController(threading.Thread):
         self.start_stop = False
         self.zawor = False     
         self.zawor_wiz = False 
-        self.auto_blokada = False 
+        self.auto_blokada = False           # Blokada zaworu przy histerezie
         self.blokada_suchobiegu = False 
         
-        self.woda_in = 0.0     
-        self.woda_in_wiz = 0.0 
+        self.woda_in = 0.0                  # Wartość dopływu
+        self.woda_in_wiz = 0.0
         
-        self.zapelnienie = 0.0       
+        self.zapelnienie = 0.0              # Ilość cieczy w zbiorniku
         self.zapelnienie_max = TANK_CAPACITY
-        self.woda_out = 0.0          
-        self.woda_delta = 0.0        
+        self.woda_out = 0.0                 # Wartość odpływu
+        self.woda_delta = 0.0               # Bilans przepływu
         
-        self.przepelnienie = False
+        self.przepelnienie = False          # Ostrzeżenie o przepełnieniu
         self.flaga_przepelnienia = False
         self.licznik = 0.0
         
-        self.time_wait = 0.0
+        self.time_wait = 0.0    
         self.time_wait_max = 0.1
         self.flaga_tab = [False] * 4 
 
@@ -128,7 +127,7 @@ class PLCController(threading.Thread):
                 if self.przepelnienie:
                     self.flaga_przepelnienia = True
 
-                if self.flaga_przepelnienia:
+                if self.flaga_przepelnienia:        # Opóźnienie wyjścia ze stanu przepełnienia
                     self.licznik += dt
                     if self.licznik >= 2.0: 
                         self.licznik = 0.0
@@ -146,27 +145,27 @@ class PLCController(threading.Thread):
                     self.zawor = True
                 elif self.auto_blokada:
                     self.zawor = True
-                else:
+                else:                           # Jeżeli poziom "nie dotknął sufitu" ani nie ma auto_blokady od histerezy zaworu to sprawdza czy użytkownik ręcznie zamknął zawór
                     self.zawor = self.zawor_wiz
 
-                # --- 4. FIZYKA DOPŁYWU ---
+                # --- 4. DOPŁYW CIECZY ---
                 if self.zawor: 
                     self.woda_in = 0.0
                 else:
-                    self.woda_in = self.woda_in_wiz
+                    self.woda_in = self.woda_in_wiz     # Pobieranie wartości dopływu podanej przed użytkownika
 
                 if self.start_stop:
                     # --- 5. BILANS WODY ---
                     self.woda_out = 0.0
-                    for p in self.pompa_tablica:
+                    for p in self.pompa_tablica:                        # Suma odpływu działających pomp
                         if p.czy_dziala:
                             self.woda_out += p.wydajnosc
 
-                    delta_vol = (self.woda_in - self.woda_out) * dt
+                    delta_vol = (self.woda_in - self.woda_out) * dt     # Obliczanie bilansu wody w czasie
                     self.woda_delta = delta_vol
-                    new_level = self.zapelnienie + delta_vol
+                    new_level = self.zapelnienie + delta_vol            # Aktualizacja poziomu cieczy
                     
-                    if new_level >= self.zapelnienie_max:
+                    if new_level >= self.zapelnienie_max:               # Utrzymanie wartości poziomu cieczy w zakresie pojemności zbiornika
                         self.zapelnienie = self.zapelnienie_max
                         if self.woda_delta > 0: 
                             self.przepelnienie = True
@@ -180,34 +179,34 @@ class PLCController(threading.Thread):
 
                     # --- 6. LOGIKA STEROWNIKA POMP (ROTACJA) ---
                     self.flaga_tab = [False] * 4
-                    pct = (self.zapelnienie / self.zapelnienie_max) * 100
+                    pct = (self.zapelnienie / self.zapelnienie_max) * 100           # Poziom cieczy w %
                     
-                    # 1. Zabezpieczenie przed suchobiegiem (Twardy stop poniżej 10%)
+                    # A. Zabezpieczenie przed suchobiegiem (Twardy stop poniżej 10%)
                     if pct <= 10.0:
                         self.blokada_suchobiegu = True 
                     elif pct >= 11.0: # Histereza: puszczamy przy 11%
                         self.blokada_suchobiegu = False 
 
-                    if self.blokada_suchobiegu:
+                    if self.blokada_suchobiegu:                                     
                         for i in range(4): 
                             self.flaga_tab[i] = False
                             self.pompa_tablica[i].czy_dziala = False 
                     
-                    # 2. Szybkie ratowanie przed przepełnieniem (powyżej 70%)
+                    # B. Szybkie ratowanie przed przepełnieniem (powyżej 70%) - załączenie wszystkich dostępnych pomp
                     elif pct > 70.0:
                         if self.sprawdz_stan_pracy(1): self.flaga_tab[0] = True
                         if self.sprawdz_stan_pracy(3): self.flaga_tab[2] = True
                         if self.sprawdz_stan_pracy(2): self.flaga_tab[1] = True
                         if self.sprawdz_stan_pracy(4): self.flaga_tab[3] = True
                     
-                    # 3. Normalna praca (Kaskada)
+                    # C. Normalna praca (Kaskada)
                     else:
                         idx_mala = self.wybierz_pompe_z_pary(1, 3)
                         idx_duza = self.wybierz_pompe_z_pary(2, 4)
-                        woda_wymagana = self.woda_in_wiz
+                        woda_wymagana = self.woda_in_wiz            # Zadana wartość dopływu
                         
                         if self.auto_blokada:
-                            woda_wymagana = PUMP_BIG_CAP 
+                           woda_wymagana = PUMP_BIG_CAP
 
                         if woda_wymagana <= PUMP_SMALL_CAP: 
                             if idx_mala is not None: self.flaga_tab[idx_mala] = True
@@ -223,8 +222,6 @@ class PLCController(threading.Thread):
 
                     # --- 7. AKTUALIZACJA WYJŚĆ ---
                     if not self.blokada_suchobiegu:
-                        # KLUCZOWA POPRAWKA: Jeśli poziom jest niski (poniżej 15%), 
-                        # pozwól pompom wystartować NATYCHMIAST (ignoruj time_wait)
                         bypass_timer = True if pct < 15.0 else False
 
                         if self.time_wait <= 0 or bypass_timer:
@@ -244,7 +241,7 @@ class PLCController(threading.Thread):
                                         if not bypass_timer: self.time_wait = 2 * self.time_wait_max
                                         break
 
-                    # --- ZLICZANIE CZASÓW ZUŻYCIA ---
+                    # --- 8. ZLICZANIE CZASÓW PRACY I ODPOCZYNKU---
                     for i in range(4):
                         if self.pompa_tablica[i].czy_dziala:
                             self.pompa_tablica[i].czas_pracy += dt
