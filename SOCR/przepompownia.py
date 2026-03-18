@@ -2,26 +2,18 @@ import sys
 import time
 import threading
 from dataclasses import dataclass
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,       # DODAĆ PRZYCISK AWARII ZAWORU, ŻEBY TEŻ DAŁO SIĘ ZROBIĆ PRZEPEŁNIENIE
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QLabel, QProgressBar, QPushButton, 
                              QSlider, QGridLayout, QFrame)
 from PyQt6.QtCore import Qt, QTimer
-
-# ==========================================
-# 1. KONFIGURACJA FIZYCZNA OBIEKTU
-# ==========================================
 
 TANK_CAPACITY = 5000.0   # Maksymalna pojemność zbiornika [L]
 PUMP_SMALL_CAP = 50.0    # Wydajność małej pompy [L/s]
 PUMP_BIG_CAP = 100.0     # Wydajność dużej pompy [L/s]
 MAX_INFLOW = 300.0       # Maksymalny możliwy dopływ z rury [L/s]
 
-VALVE_CLOSE_LEVEL = 0.9 * TANK_CAPACITY  # Zamknij przy 90% - górny próg histerezy zaworu
-VALVE_OPEN_LEVEL = 0.8 * TANK_CAPACITY   # Otwórz dopiero jak spadnie do 80% - dolny próg histerezy zaworu
-
-# ==========================================
-# 2. DEFINICJE STRUKTUR DANYCH
-# ==========================================
+VALVE_CLOSE_LEVEL = 0.9 * TANK_CAPACITY  # Zamknij przy 90% (górny próg)
+VALVE_OPEN_LEVEL = 0.8 * TANK_CAPACITY   # Otwórz przy 80% (dolny próg)
 
 @dataclass
 class PompaStruct:
@@ -30,184 +22,136 @@ class PompaStruct:
     czy_dziala: bool = False
     czas_pracy: float = 0.0
     czas_odpoczynku: float = 5.0 
-    czas_odpoczynku_min: float = 5.0   # Minimalny czas odpoczynku pompy [s]
-    czas_pracy_max: float = 15.0        # Nieprzekraczalny czas pracy pompy [s]
-    czujnik_temp: bool = False          # Błąd temperaturowy/przegrzanie
+    czas_odpoczynku_min: float = 5.0    # Min czas odpoczynku [s]
+    czas_pracy_max: float = 15.0        # Max czas pracy [s]
+    czujnik_temp: bool = False          # Przegrzanie pompy
 
-# ==========================================
-# 3. LOGIKA STEROWNIKA
-# ==========================================
-
-class PLCController(threading.Thread):      # Klasa dziedzicząca po threading.Thread - działanie jako osobny wątek
+class PLCController(threading.Thread):  # Osobny wątek w tle - symulacja sterownika
     def __init__(self):
         super().__init__()
-        self.daemon = True 
-        self.running = True
-        self.lock = threading.Lock()
+        self.daemon = True              # Zamknij z aplikacją
+        self.running = True             # Utrzymanie pętli
+        self.lock = threading.Lock()    # Zabezpieczenie zmiennych - zabezpiecza przed sytuacją, w której panel graficzny i sterownik próbują zmienić tę samą zmienną jednocześnie
 
-        self.pompa_tablica = [
+        self.pompa_tablica = [          # Tablica odwołań do PompaStruct m.in. w celu iteracji
             PompaStruct(1, PUMP_SMALL_CAP),
             PompaStruct(2, PUMP_BIG_CAP),
             PompaStruct(3, PUMP_SMALL_CAP),
             PompaStruct(4, PUMP_BIG_CAP)
         ]
         
-        # Wejścia/Wyjścia
-        self.start_stop = False
-        self.zawor = False     
-        self.zawor_wiz = False 
-        self.auto_blokada = False           # Blokada zaworu przy histerezie
-        self.blokada_suchobiegu = False 
+        self.start_stop = False             # Główny włącznik
+        self.zawor = False                  # Stan faktyczny zaworu
+        self.zawor_wiz = False              # Żądanie z HMI
+        self.auto_blokada = False           # Blokada przepełnieniowa
+        self.blokada_suchobiegu = False     # Blokada pustego zbiornika
         
-        self.woda_in = 0.0                  # Wartość dopływu
-        self.woda_in_wiz = 0.0
+        self.woda_in = 0.0                  # Faktyczny dopływ
+        self.woda_in_wiz = 0.0              # Żądanie dopływu z suwaka
         
-        self.zapelnienie = 0.0              # Ilość cieczy w zbiorniku
+        self.zapelnienie = 0.0              # Aktualny stan wody
         self.zapelnienie_max = TANK_CAPACITY
-        self.woda_out = 0.0                 # Wartość odpływu
-        self.woda_delta = 0.0               # Bilans przepływu
+        self.woda_out = 0.0                 # Sumaryczny odpływ
+        self.woda_delta = 0.0               # Zmiana objętości
         
-        self.przepelnienie = False          # Ostrzeżenie o przepełnieniu
+        self.przepelnienie = False          # Ostrzeżenie HMI
         self.flaga_przepelnienia = False
-        self.licznik = 0.0
+        self.licznik = 0.0                  # Timer resetu przepełnienia
         
-        self.time_wait = 0.0    
-        self.time_wait_max = 0.1
-        self.flaga_tab = [False] * 4 
+        self.time_wait = 0.0                # Odliczanie opóźnienia pomp
+        self.time_wait_max = 0.1            # Zwłoka przełączania
+        self.flaga_tab = [False] * 4        # Stany żądane pomp
 
-    def sprawdz_stan_pracy(self, index):
+    def sprawdz_stan_pracy(self, index):    # Sprawdza gotowość konkretnej pompy
         p = self.pompa_tablica[index-1]
-        if p.czujnik_temp: return False
-        
-        if p.czy_dziala:
-            return True if p.czas_pracy < p.czas_pracy_max else False
-        else:
-            return True if p.czas_odpoczynku >= p.czas_odpoczynku_min else False
+        if p.czujnik_temp: return False                                             # Czy nie ma awarii termicznej
+        if p.czy_dziala: return True if p.czas_pracy < p.czas_pracy_max else False  # Jeżeli pracuje zwraca True, chyba że przekroczyła limit to False
+        else: return True if p.czas_odpoczynku >= p.czas_odpoczynku_min else False  # Tak samo jak przy pracy ale dla odpoczynku
 
-    def wybierz_pompe_z_pary(self, id1, id2):
-        idx1 = id1 - 1
-        idx2 = id2 - 1
-        p1 = self.pompa_tablica[idx1]
-        p2 = self.pompa_tablica[idx2]
-        
-        ok1 = self.sprawdz_stan_pracy(id1)
-        ok2 = self.sprawdz_stan_pracy(id2)
-        
-        if ok1 and ok2:
-            if p1.czas_pracy <= p2.czas_pracy:
-                return idx1
-            else:
-                return idx2
-        elif ok1:
-            return idx1
-        elif ok2:
-            return idx2
-        else:
-            return None
+    def wybierz_pompe_z_pary(self, id1, id2):                                   # Wyrównywanie zużycia sprzętu
+        idx1, idx2 = id1 - 1, id2 - 1                                           # Zamienia numery 1-4 na indeksy tablicy 0-3
+        p1, p2 = self.pompa_tablica[idx1], self.pompa_tablica[idx2]
+        ok1, ok2 = self.sprawdz_stan_pracy(id1), self.sprawdz_stan_pracy(id2)
+        if ok1 and ok2: return idx1 if p1.czas_pracy <= p2.czas_pracy else idx2 # Obie gotowe? Wybierz tę, która pracowała krócej
+        elif ok1: return idx1                                                   # Tylko pierwsza gotowa? Wybierz ją
+        elif ok2: return idx2                                                   # Tylko druga gotowa? Wybierz ją
+        else: return None                                                       # Obie zablokowane/zepsute? Nie włączaj żadnej
 
-    def run(self):
+    def run(self): # Główny cykl obliczeniowy
         last_time = time.perf_counter()
-        target_cycle = 0.01
+        target_cycle = 0.01                 # Cykl 10 ms
 
         while self.running:
             current_time = time.perf_counter()
-            dt = current_time - last_time
+            dt = current_time - last_time   # Różnica czasu
             last_time = current_time
-            if dt > 1.0: dt = target_cycle 
+            if dt > 1.0: dt = target_cycle  # Limit stabilności
 
             with self.lock:
-                
-                # --- 0. ZABEZPIECZENIE SPRZĘTOWE: NATYCHMIASTOWY STOP PRZY AWARII TERMICZNEJ ---
-                for i in range(4):
+                for i in range(4): # Stop termiczny
                     if self.pompa_tablica[i].czujnik_temp and self.pompa_tablica[i].czy_dziala:
                         self.pompa_tablica[i].czy_dziala = False
                         self.flaga_tab[i] = False
 
-                # --- 1. OBSŁUGA FLAGI PRZEPEŁNIENIA ---
-                if self.przepelnienie:
-                    self.flaga_przepelnienia = True
-
-                if self.flaga_przepelnienia:        # Opóźnienie wyjścia ze stanu przepełnienia
+                if self.przepelnienie: self.flaga_przepelnienia = True
+                if self.flaga_przepelnienia: # Opóźnienie odblokowania przepełnienia
                     self.licznik += dt
                     if self.licznik >= 2.0: 
                         self.licznik = 0.0
                         self.flaga_przepelnienia = False
                         self.przepelnienie = False
 
-                # --- 2. HISTEREZA ZAWORU ---
-                if self.zapelnienie >= VALVE_CLOSE_LEVEL:
-                    self.auto_blokada = True 
-                elif self.zapelnienie <= VALVE_OPEN_LEVEL:
-                    self.auto_blokada = False 
+                if self.zapelnienie >= VALVE_CLOSE_LEVEL: self.auto_blokada = True # Zamknij zawór
+                elif self.zapelnienie <= VALVE_OPEN_LEVEL: self.auto_blokada = False # Otwórz zawór
 
-                # --- 3. FINALNE STEROWANIE ZAWOREM ---
-                if self.flaga_przepelnienia:
-                    self.zawor = True
-                elif self.auto_blokada:
-                    self.zawor = True
-                else:                           # Jeżeli poziom "nie dotknął sufitu" ani nie ma auto_blokady od histerezy zaworu to sprawdza czy użytkownik ręcznie zamknął zawór
-                    self.zawor = self.zawor_wiz
+                if self.flaga_przepelnienia or self.auto_blokada: self.zawor = True
+                else: self.zawor = self.zawor_wiz # Sterowanie z HMI
 
-                # --- 4. DOPŁYW CIECZY ---
-                if self.zawor: 
-                    self.woda_in = 0.0
-                else:
-                    self.woda_in = self.woda_in_wiz     # Pobieranie wartości dopływu podanej przed użytkownika
+                if self.zawor: self.woda_in = 0.0 # Zamknięcie odcinka wlotowego
+                else: self.woda_in = self.woda_in_wiz 
 
                 if self.start_stop:
-                    # --- 5. BILANS WODY ---
                     self.woda_out = 0.0
-                    for p in self.pompa_tablica:                        # Suma odpływu działających pomp
-                        if p.czy_dziala:
-                            self.woda_out += p.wydajnosc
+                    for p in self.pompa_tablica: # Zliczanie odpływu
+                        if p.czy_dziala: self.woda_out += p.wydajnosc
 
-                    delta_vol = (self.woda_in - self.woda_out) * dt     # Obliczanie bilansu wody w czasie
+                    delta_vol = (self.woda_in - self.woda_out) * dt # Bilans
                     self.woda_delta = delta_vol
-                    new_level = self.zapelnienie + delta_vol            # Aktualizacja poziomu cieczy
+                    new_level = self.zapelnienie + delta_vol 
                     
-                    if new_level >= self.zapelnienie_max:               # Utrzymanie wartości poziomu cieczy w zakresie pojemności zbiornika
+                    if new_level >= self.zapelnienie_max: # Limit fizyczny max
                         self.zapelnienie = self.zapelnienie_max
-                        if self.woda_delta > 0: 
-                            self.przepelnienie = True
-                    elif new_level <= 0:
+                        if self.woda_delta > 0: self.przepelnienie = True
+                    elif new_level <= 0: # Limit fizyczny min
                         self.zapelnienie = 0.0
                         self.przepelnienie = False
                     else:
                         self.zapelnienie = new_level
-                        if self.przepelnienie and self.woda_delta < 0:
-                            self.przepelnienie = False
+                        if self.przepelnienie and self.woda_delta < 0: self.przepelnienie = False
 
-                    # --- 6. LOGIKA STEROWNIKA POMP (ROTACJA) ---
                     self.flaga_tab = [False] * 4
-                    pct = (self.zapelnienie / self.zapelnienie_max) * 100           # Poziom cieczy w %
+                    pct = (self.zapelnienie / self.zapelnienie_max) * 100 
                     
-                    # A. Zabezpieczenie przed suchobiegiem (Twardy stop poniżej 10%)
-                    if pct <= 10.0:
-                        self.blokada_suchobiegu = True 
-                    elif pct >= 11.0: # Histereza: puszczamy przy 11%
-                        self.blokada_suchobiegu = False 
+                    if pct <= 10.0: self.blokada_suchobiegu = True # Suchobieg
+                    elif pct >= 11.0: self.blokada_suchobiegu = False # Zwolnienie suchobiegu
 
-                    if self.blokada_suchobiegu:                                     
+                    if self.blokada_suchobiegu: # Odcięcie pomp
                         for i in range(4): 
                             self.flaga_tab[i] = False
                             self.pompa_tablica[i].czy_dziala = False 
                     
-                    # B. Szybkie ratowanie przed przepełnieniem (powyżej 70%) - załączenie wszystkich dostępnych pomp
-                    elif pct > 70.0:
+                    elif pct > 70.0: # Tryb awaryjnego odpompowania
                         if self.sprawdz_stan_pracy(1): self.flaga_tab[0] = True
                         if self.sprawdz_stan_pracy(3): self.flaga_tab[2] = True
                         if self.sprawdz_stan_pracy(2): self.flaga_tab[1] = True
                         if self.sprawdz_stan_pracy(4): self.flaga_tab[3] = True
                     
-                    # C. Normalna praca (Kaskada)
-                    else:
+                    else: # Kaskada
                         idx_mala = self.wybierz_pompe_z_pary(1, 3)
                         idx_duza = self.wybierz_pompe_z_pary(2, 4)
-                        woda_wymagana = self.woda_in_wiz            # Zadana wartość dopływu
+                        woda_wymagana = self.woda_in_wiz # Sterowanie na podstawie suwaka
                         
-                        if self.auto_blokada:
-                           woda_wymagana = PUMP_BIG_CAP
-
+                        if self.auto_blokada: woda_wymagana = PUMP_BIG_CAP # Wymuszanie odpływu przy blokadzie
                         if woda_wymagana <= PUMP_SMALL_CAP: 
                             if idx_mala is not None: self.flaga_tab[idx_mala] = True
                             elif idx_duza is not None: self.flaga_tab[idx_duza] = True
@@ -220,29 +164,25 @@ class PLCController(threading.Thread):      # Klasa dziedzicząca po threading.T
                             if idx_duza is not None: self.flaga_tab[idx_duza] = True
                             if idx_mala is not None: self.flaga_tab[idx_mala] = True
 
-                    # --- 7. AKTUALIZACJA WYJŚĆ ---
                     if not self.blokada_suchobiegu:
-                        bypass_timer = True if pct < 15.0 else False
+                        bypass_timer = True if pct < 15.0 else False # Szybki rozruch na niskim poziomie
 
-                        if self.time_wait <= 0 or bypass_timer:
+                        if self.time_wait <= 0 or bypass_timer: # Zwłoka prądowa
                             przelaczono = False
-                            # Wyłączanie
-                            for i in range(4):
+                            for i in range(4): # Priorytet wyłączeń
                                 if not self.flaga_tab[i] and self.pompa_tablica[i].czy_dziala:
                                     self.pompa_tablica[i].czy_dziala = False
                                     if not bypass_timer: self.time_wait = 2 * self.time_wait_max
                                     przelaczono = True
                                     break 
-                            # Włączanie
-                            if not przelaczono:
+                            if not przelaczono: # Włączenia awaryjne/rotacyjne
                                 for i in range(4):
                                     if self.flaga_tab[i] and not self.pompa_tablica[i].czy_dziala:
                                         self.pompa_tablica[i].czy_dziala = True
                                         if not bypass_timer: self.time_wait = 2 * self.time_wait_max
                                         break
 
-                    # --- 8. ZLICZANIE CZASÓW PRACY I ODPOCZYNKU---
-                    for i in range(4):
+                    for i in range(4): # Liczniki stanu sprzętu
                         if self.pompa_tablica[i].czy_dziala:
                             self.pompa_tablica[i].czas_pracy += dt
                             self.pompa_tablica[i].czas_odpoczynku = 0
@@ -250,27 +190,20 @@ class PLCController(threading.Thread):      # Klasa dziedzicząca po threading.T
                             self.pompa_tablica[i].czas_pracy = 0.0 
                             self.pompa_tablica[i].czas_odpoczynku += dt
 
-                    if self.time_wait > 0:
-                        self.time_wait -= dt
+                    if self.time_wait > 0: self.time_wait -= dt # Odsyłanie blokady
 
             process_duration = time.perf_counter() - current_time
             sleep_needed = target_cycle - process_duration
-            if sleep_needed > 0:
-                time.sleep(sleep_needed)
+            if sleep_needed > 0: time.sleep(sleep_needed) # Oszczędzanie CPU
 
-# ==========================================
-# 4. WIZUALIZACJA (GUI)
-# ==========================================
-
-class MainWindow(QMainWindow):
+class MainWindow(QMainWindow): # Klasa obsługująca GUI
     def __init__(self, controller):
         super().__init__()
         self.plc = controller
         self.setWindowTitle("PRZEPOMPOWNIA WODY - SOCR")
         self.resize(1000, 700)
         
-        # Zmienne do skalowania czcionek
-        self.scale = 1.0
+        self.scale = 1.0 # Zmienne skalowania czcionek
         self.font_std = 12
         self.font_med = 14
         self.font_big = 16
@@ -280,17 +213,13 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout(central_widget)
+        top_layout = QHBoxLayout() # Główny podział okna
         
-        # --- PANEL GÓRNY ---
-        top_layout = QHBoxLayout()
-        
-        # Lewy panel sterowania
-        self.control_panel = QFrame()
+        self.control_panel = QFrame() # Panel lewy
         self.control_panel.setFrameShape(QFrame.Shape.StyledPanel)
         cp_layout = QVBoxLayout(self.control_panel)
         
         self.lbl_panel_title = QLabel("<b>PANEL OPERATORSKI</b>")
-        
         self.btn_start = QPushButton("START / STOP SYSTEMU")
         self.btn_start.setCheckable(True)
         self.btn_start.clicked.connect(self.toggle_start)
@@ -310,7 +239,7 @@ class MainWindow(QMainWindow):
         self.lbl_actual_in = QLabel("Aktualny dopływ (Rura): 0.0 L/s")
         self.lbl_actual_out = QLabel("Aktualny odpływ (Pompy): 0.0 L/s")
         
-        cp_layout.addWidget(self.lbl_panel_title)
+        cp_layout.addWidget(self.lbl_panel_title) # Dodawanie do layoutu HMI
         cp_layout.addWidget(self.btn_start)
         cp_layout.addWidget(self.btn_valve)
         cp_layout.addWidget(self.lbl_valve_status)
@@ -321,8 +250,7 @@ class MainWindow(QMainWindow):
         cp_layout.addWidget(self.lbl_actual_out)
         cp_layout.addStretch()
         
-        # Prawy panel - Zbiornik
-        self.tank_panel = QFrame()
+        self.tank_panel = QFrame() # Panel prawy
         tank_layout = QVBoxLayout(self.tank_panel)
         tank_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter) 
         
@@ -337,7 +265,7 @@ class MainWindow(QMainWindow):
         self.lbl_overflow = QLabel("STAN: OK")
         self.lbl_overflow.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        tank_layout.addWidget(self.lbl_tank_title)
+        tank_layout.addWidget(self.lbl_tank_title) # Składanie prawego panelu
         tank_layout.addWidget(self.tank_bar)
         tank_layout.addWidget(self.lbl_tank_info)
         tank_layout.addWidget(self.lbl_overflow)
@@ -346,14 +274,13 @@ class MainWindow(QMainWindow):
         top_layout.addWidget(self.tank_panel, 3) 
         layout.addLayout(top_layout, 2)
         
-        # --- PANEL DOLNY - POMPY ---
-        self.lbl_pump_title = QLabel("<b>ZESTAW POMP</b>")
+        self.lbl_pump_title = QLabel("<b>ZESTAW POMP</b>") # Dół okna
         layout.addWidget(self.lbl_pump_title)
         pumps_layout = QGridLayout()
         self.pump_widgets = []
         self.pump_frames = []
         
-        for i in range(4):
+        for i in range(4): # Generowanie pomp dla GUI
             frame = QFrame()
             frame.setFrameShape(QFrame.Shape.Box)
             vbox = QVBoxLayout(frame)
@@ -371,7 +298,7 @@ class MainWindow(QMainWindow):
             lbl_stats = QLabel("Praca: 0.0s\nPrzerwa: 5.0s")
             lbl_stats.setAlignment(Qt.AlignmentFlag.AlignCenter)
             
-            btn_temp = QPushButton("TEMP")
+            btn_temp = QPushButton("AWARIA")
             btn_temp.setCheckable(True)
             btn_temp.clicked.connect(lambda checked, idx=i: self.set_temp_error(idx, checked))
 
@@ -391,20 +318,19 @@ class MainWindow(QMainWindow):
             
         layout.addLayout(pumps_layout, 1)
 
-        self.calculate_fonts()
+        self.calculate_fonts() # Uruchomienie skali
         self.update_static_styles()
 
-        self.gui_timer = QTimer()
+        self.gui_timer = QTimer() # Timer obsługujący rysowanie
         self.gui_timer.timeout.connect(self.update_gui)
         self.gui_timer.start(50) 
 
-    # --- SKALOWANIE OKNA ---
-    def resizeEvent(self, event):
+    def resizeEvent(self, event): # Utrzymanie rozmiarów
         self.calculate_fonts()
         self.update_static_styles()
         super().resizeEvent(event)
 
-    def calculate_fonts(self):
+    def calculate_fonts(self): # Przeliczanie jednostek rozmiaru
         base_width = 1000.0
         self.scale = self.width() / base_width
         if self.scale < 0.6: self.scale = 0.6 
@@ -415,7 +341,7 @@ class MainWindow(QMainWindow):
         self.padding_std = int(10 * self.scale)
         self.padding_big = int(15 * self.scale)
 
-    def update_static_styles(self):
+    def update_static_styles(self): # Zmiana CSS dla okna
         font_title_css = f"font-size: {self.font_med}px;"
         self.lbl_panel_title.setStyleSheet(font_title_css)
         self.lbl_tank_title.setStyleSheet(font_title_css)
@@ -444,91 +370,66 @@ class MainWindow(QMainWindow):
                 QPushButton:checked {{ background-color: red; color: white; font-weight: bold; }}
             """)
 
-    def toggle_start(self, checked):
+    def toggle_start(self, checked): # Akcja: Przycisk zasilania
         with self.plc.lock:
             self.plc.start_stop = checked
-            if checked:
-                self.btn_start.setText("SYSTEM PRACUJE")
-            else:
-                self.btn_start.setText("SYSTEM ZATRZYMANY")
+            if checked: self.btn_start.setText("SYSTEM PRACUJE")
+            else: self.btn_start.setText("SYSTEM ZATRZYMANY")
 
-    def toggle_valve(self, checked):
+    def toggle_valve(self, checked): # Akcja: Przycisk zaworu w HMI
         with self.plc.lock:
             self.plc.zawor_wiz = checked 
-            if checked:
-                self.btn_valve.setText("ŻĄDANIE: OTWÓRZ")
-            else:
-                self.btn_valve.setText("ŻĄDANIE: ZAMKNIJ")
+            if checked: self.btn_valve.setText("ŻĄDANIE: OTWÓRZ")
+            else: self.btn_valve.setText("ŻĄDANIE: ZAMKNIJ")
 
-    def update_flow_input(self, value):
+    def update_flow_input(self, value): # Akcja: Suwak na ekranie
         flow_l_s = value
-        with self.plc.lock:
-            self.plc.woda_in_wiz = flow_l_s
+        with self.plc.lock: self.plc.woda_in_wiz = flow_l_s
         self.lbl_flow.setText(f"Zadany dopływ: {flow_l_s:.1f} L/s")
 
-    def set_temp_error(self, index, checked):
-        with self.plc.lock:
-            self.plc.pompa_tablica[index].czujnik_temp = checked
+    def set_temp_error(self, index, checked): # Akcja: Przycisk błędu na pompie
+        with self.plc.lock: self.plc.pompa_tablica[index].czujnik_temp = checked
 
-    def update_gui(self):
+    def update_gui(self): # Klatka odświeżania na ekranie
         with self.plc.lock:
-            # Aktualizacja poziomu
-            self.tank_bar.setValue(int(self.plc.zapelnienie))
+            self.tank_bar.setValue(int(self.plc.zapelnienie)) # Stan rury progresu
             pct = (self.plc.zapelnienie / TANK_CAPACITY) * 100
             self.lbl_tank_info.setText(f"Poziom: {self.plc.zapelnienie:.0f} L  ({pct:.1f}%)")
             
-            # Styl przycisku Start
-            if self.plc.start_stop:
-                self.btn_start.setStyleSheet(f"""
-                    QPushButton {{ padding: {self.padding_big}px; font-weight: bold; font-size: {self.font_big}px; background-color: #006600; color: white; }}
-                """)
+            if self.plc.start_stop: # Kolory startu
+                self.btn_start.setStyleSheet(f"QPushButton {{ padding: {self.padding_big}px; font-weight: bold; font-size: {self.font_big}px; background-color: #006600; color: white; }}")
             else:
-                self.btn_start.setStyleSheet(f"""
-                    QPushButton {{ padding: {self.padding_big}px; font-weight: bold; font-size: {self.font_big}px; background-color: #cccccc; color: black; }}
-                """)
+                self.btn_start.setStyleSheet(f"QPushButton {{ padding: {self.padding_big}px; font-weight: bold; font-size: {self.font_big}px; background-color: #cccccc; color: black; }}")
 
-            # Styl przycisku Zawór (Ręczny)
-            val_btn_color = "#cc0000" if self.btn_valve.isChecked() else "#ccffcc"
+            val_btn_color = "#cc0000" if self.btn_valve.isChecked() else "#ccffcc" # Kolory zaworu
             val_btn_text = "white" if self.btn_valve.isChecked() else "black"
-            self.btn_valve.setStyleSheet(f"""
-                QPushButton {{ padding: {self.padding_std}px; font-size: {self.font_std}px; background-color: {val_btn_color}; color: {val_btn_text}; }}
-            """)
+            self.btn_valve.setStyleSheet(f"QPushButton {{ padding: {self.padding_std}px; font-size: {self.font_std}px; background-color: {val_btn_color}; color: {val_btn_text}; }}")
 
-            # Status zaworu (Wyświetlacz)
-            if self.plc.zawor:
+            if self.plc.zawor: # Status układu na panelu HMI
                 self.lbl_valve_status.setText("ZAWÓR: ZAMKNIĘTY")
                 self.lbl_valve_status.setStyleSheet(f"background-color: #cc0000; color: white; padding: {self.padding_std}px; font-weight: bold; border: 2px solid black; font-size: {self.font_med}px;")
                 
-                # Tekst na przycisku ręcznym
-                if self.plc.zawor_wiz:
-                    self.btn_valve.setText("ŻĄDANIE: OTWÓRZ")
-                elif self.plc.flaga_przepelnienia:
-                     self.btn_valve.setText("BLOKADA (AWARIA!)")
+                if self.plc.zawor_wiz: self.btn_valve.setText("ŻĄDANIE: OTWÓRZ")
+                elif self.plc.flaga_przepelnienia: self.btn_valve.setText("BLOKADA (AWARIA!)")
                 elif self.plc.auto_blokada:
-                     if self.plc.zapelnienie >= 0.9 * TANK_CAPACITY:
-                         self.btn_valve.setText("BLOKADA (POZIOM > 90%)")
-                     else:
-                         self.btn_valve.setText("CZEKAM NA SPADEK < 80%")
+                     if self.plc.zapelnienie >= 0.9 * TANK_CAPACITY: self.btn_valve.setText("BLOKADA (POZIOM > 90%)")
+                     else: self.btn_valve.setText("CZEKAM NA SPADEK < 80%")
             else:
                 self.lbl_valve_status.setText("ZAWÓR: OTWARTY")
                 self.lbl_valve_status.setStyleSheet(f"background-color: #00cc00; color: white; padding: {self.padding_std}px; font-weight: bold; border: 2px solid black; font-size: {self.font_med}px;")
-                if not self.plc.zawor_wiz:
-                    self.btn_valve.setText("ŻĄDANIE: ZAMKNIJ")
+                if not self.plc.zawor_wiz: self.btn_valve.setText("ŻĄDANIE: ZAMKNIJ")
 
-            # Przepływy
-            self.lbl_actual_in.setText(f"Aktualny dopływ: {self.plc.woda_in:.1f} L/s")
+            self.lbl_actual_in.setText(f"Aktualny dopływ: {self.plc.woda_in:.1f} L/s") # Podsumowanie bilansu
             self.lbl_actual_out.setText(f"Aktualny odpływ: {self.plc.woda_out:.1f} L/s")
 
-            # Alarm
-            if self.plc.flaga_przepelnienia or self.plc.przepelnienie:
+            if self.plc.flaga_przepelnienia or self.plc.przepelnienie: # Ekran alertów
                 self.lbl_overflow.setText("!!! PRZEPEŁNIENIE !!!")
                 self.lbl_overflow.setStyleSheet(f"color: white; background-color: red; font-weight: bold; font-size: {self.font_big}px; border: 3px solid black; padding: {self.padding_std}px;")
             else:
                 self.lbl_overflow.setText("STAN: OK")
                 self.lbl_overflow.setStyleSheet(f"color: green; font-weight: bold; font-size: {self.font_big}px; border: 2px solid green; padding: {self.padding_std}px;")
 
-            # Pompy
-            for i, p in enumerate(self.plc.pompa_tablica):
+            for i, p in enumerate(self.plc.pompa_tablica): # Dynamiczne kontrolki stacji pomp
                 widgets = self.pump_widgets[i]
                 if p.czy_dziala:
                     widgets["status"].setText("PRACA")
@@ -541,12 +442,12 @@ class MainWindow(QMainWindow):
                         widgets["status"].setText("STOP")
                         widgets["status"].setStyleSheet(f"background-color: #aa0000; color: white; padding: {self.padding_std}px; font-weight: bold; border: 1px solid black; font-size: {self.font_std}px;")
                 
-                widgets["stats"].setText(f"Praca: {p.czas_pracy:.1f}s\nPrzerwa: {p.czas_odpoczynku:.1f}s")
+                widgets["stats"].setText(f"Praca: {p.czas_pracy:.1f}s\nPrzerwa: {p.czas_odpoczynku:.1f}s") # Odświeżenie danych zegarowych
 
-if __name__ == "__main__":
+if __name__ == "__main__": # Punkt startu aplikacji
     app = QApplication(sys.argv)
     controller = PLCController()
-    controller.start()
+    controller.start() 
     window = MainWindow(controller)
-    window.show()
+    window.show() 
     sys.exit(app.exec())
